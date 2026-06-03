@@ -591,8 +591,8 @@ function setupScene() {
 
   const spawnWorld = currentRooms[1].scene.getObjectByName('Spawn')
     .localToWorld(new THREE.Vector3());
-  controls.getObject().position.set(spawnWorld.x, 1.65, spawnWorld.z);
-  controls.getObject().rotation.y = Math.PI / 4;
+  controls.object.position.set(spawnWorld.x, 1.65, spawnWorld.z);
+  controls.object.rotation.y = Math.PI / 4;
 
   checkRoomChange(controls);
   // Guarantee 2 pages in different rooms (shuffle, take first 2)
@@ -676,7 +676,7 @@ function trySpawnPage() {
 
 function updatePages() {
   if (!gameActive) return;
-  const pp  = controls.getObject().position;
+  const pp  = controls.object.position;
   const now = performance.now();
 
   for (let i = pageMeshes.length - 1; i >= 0; i--) {
@@ -722,7 +722,7 @@ function updatePageCompass() {
   }
 
   // Find nearest page
-  const pp = controls.getObject().position;
+  const pp = controls.object.position;
   let nearest = null, nearestDist = Infinity;
   for (const p of pageMeshes) {
     const d = pp.distanceTo(p.position);
@@ -790,7 +790,7 @@ function updateSanity(delta) {
   if (!isMoving)   drain += SANITY_DRAIN_STILL;
   if (isSprinting && isMoving) drain += SANITY_DRAIN_SPRINT;
 
-  const pp = controls.getObject().position;
+  const pp = controls.object.position;
   entityNearby = false;
   for (const e of entities) {
     if (!e.active) continue;
@@ -817,7 +817,7 @@ function applySanityFX() {
   const sat = 1 - fear * 0.55, bri = 1 - fear * 0.18;
   renderer.domElement.style.filter = `saturate(${sat.toFixed(2)}) brightness(${bri.toFixed(2)})`;
   if (fear > 0.7 && Math.random() < 0.02) {
-    controls.getObject().rotation.z += (Math.random() - 0.5) * 0.015 * fear;
+    controls.object.rotation.z += (Math.random() - 0.5) * 0.015 * fear;
   }
 }
 
@@ -924,7 +924,7 @@ function hasLineOfSight(from, to) {
 }
 
 function updateDevorador(ent, delta) {
-  const pp   = controls.getObject().position;
+  const pp   = controls.object.position;
   const dist = pp.distanceTo(ent.sprite.position);
   const fear = 1 - sanity / 100;
   const ecfg  = LEVEL_CONFIGS[currentLevel];
@@ -1011,7 +1011,7 @@ function updateEntities(delta) {
 }
 
 function checkEntityKills() {
-  const pp = controls.getObject().position;
+  const pp = controls.object.position;
   for (const ent of entities) {
     if (!ent.active) continue;
     const dist = pp.distanceTo(ent.sprite.position);
@@ -1099,7 +1099,7 @@ function updateRoomBounds(dir) {
 }
 
 function checkRoomChange(controls) {
-  const p = controls.getObject().position;
+  const p = controls.object.position;
   if (p.z < currentRoomBounds[0]) { updateRoomBounds('North'); updateRooms('North'); trySpawnEntities(); trySpawnPage(); }
   if (p.x > currentRoomBounds[1]) { updateRoomBounds('East');  updateRooms('East');  trySpawnEntities(); trySpawnPage(); }
   if (p.z > currentRoomBounds[2]) { updateRoomBounds('South'); updateRooms('South'); trySpawnEntities(); trySpawnPage(); }
@@ -1109,7 +1109,7 @@ function checkRoomChange(controls) {
 // ─── Collision ────────────────────────────────────────────────────────────────
 
 function collisionDetection() {
-  const pos = controls.getObject().position;
+  const pos = controls.object.position;
 
   // Lock Y — player must always stand at eye height
   pos.y = 1.65;
@@ -1257,7 +1257,7 @@ function animate() {
   if (!gameLost && !gameWon) {
     collisionDetection();
     checkRoomChange(controls);
-    playerMesh.position.copy(controls.getObject().position);
+    playerMesh.position.copy(controls.object.position);
     updateRoomLights(delta, now / 1000);
     updateSanity(delta);
     applySanityFX();
@@ -1273,7 +1273,7 @@ function animate() {
 
     if (checkEntityKills()) {
       triggerDeath();
-    } else if (exitMesh && controls.getObject().position.distanceTo(exitMesh.position) < 1.2) {
+    } else if (exitMesh && controls.object.position.distanceTo(exitMesh.position) < 1.2) {
       triggerWin();
     }
   }
