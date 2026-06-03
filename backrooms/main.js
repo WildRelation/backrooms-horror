@@ -1273,7 +1273,6 @@ function animate() {
 document.getElementById('restart').addEventListener('click', async () => {
   menuEl.style.display = 'none';
   startTime = undefined;
-  currentLevel = 0;
   await init();
 });
 
