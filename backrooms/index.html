@@ -56,8 +56,20 @@
     <!-- Page counter -->
     <div id="pageCounter"></div>
 
-    <!-- Page compass — arrow pointing toward nearest page -->
-    <div id="pageCompass"><div id="pageCompassArrow">▲</div></div>
+    <!-- Page compass -->
+    <div id="pageCompass">
+      <div id="pageCompassRing">
+        <div id="pageCompassArrow">
+          <svg viewBox="0 0 24 40" width="16" height="26">
+            <!-- North needle: bright, pointed -->
+            <polygon points="12,0 17,20 12,15 7,20" fill="white"/>
+            <!-- South needle: dimmed -->
+            <polygon points="12,40 17,20 12,25 7,20" fill="rgba(255,255,255,0.2)"/>
+          </svg>
+        </div>
+      </div>
+      <div id="pageCompassLabel">página</div>
+    </div>
 
     <!-- Crosshair (disappears after first mouse move) -->
     <div id="crosshair"></div>

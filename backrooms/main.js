@@ -126,7 +126,7 @@ let exitMesh       = null;
 let exitSpawned    = false;
 
 // Audio
-let walkingSound, buzzingSound, breathingSound, glitchSound, deathSound, winSound;
+let walkingSound, buzzingSound, glitchSound, deathSound, winSound;
 let audioLoader;
 let animFrameId = null;
 
@@ -167,8 +167,9 @@ async function init() {
   }
 
   // Stop all sounds from previous session
-  [walkingSound, buzzingSound, breathingSound, glitchSound, deathSound, winSound]
+  [walkingSound, buzzingSound, glitchSound, deathSound, winSound]
     .forEach(s => { try { if (s?.isPlaying) s.stop(); } catch(_) {} });
+  // Reset buzzing — will restart after next pointer lock
 
   document.querySelectorAll('canvas').forEach(c => c.remove());
   if (renderer) renderer.dispose();
@@ -302,7 +303,9 @@ function onCanvasClick() {
 function onControlsLock() {
   if (!startTime) startTime = performance.now();
   gameActive = playerMovement = true;
-  timerHint.classList.remove('show'); // hide "haz clic" hint immediately on lock
+  timerHint.classList.remove('show');
+  // Start ambient buzzing now that we have a user gesture
+  if (buzzingSound.buffer && !buzzingSound.isPlaying) buzzingSound.play();
   if (pagesCollected === 0) {
     const cfg = LEVEL_CONFIGS[currentLevel];
     showHint(`${cfg.name} — busca las páginas blancas`, 5000);
@@ -331,7 +334,6 @@ function initAudio() {
 
   walkingSound   = new THREE.Audio(listener);
   buzzingSound   = new THREE.Audio(listener);
-  breathingSound = new THREE.Audio(listener);
   glitchSound    = new THREE.Audio(listener);
   deathSound     = new THREE.Audio(listener);
   winSound       = new THREE.Audio(listener);
@@ -341,10 +343,7 @@ function initAudio() {
   });
   audioLoader.load('./sounds/buzzing.mp3', buf => {
     buzzingSound.setBuffer(buf); buzzingSound.setLoop(true); buzzingSound.setVolume(0.06);
-    buzzingSound.play();
-  });
-  audioLoader.load('./sounds/cough.mp3', buf => {
-    breathingSound.setBuffer(buf); breathingSound.setLoop(true); breathingSound.setVolume(0);
+    // Play only after user gesture — browsers block audio before interaction
   });
   audioLoader.load('./sounds/glitch.mp3', buf => {
     glitchSound.setBuffer(buf); glitchSound.setLoop(false); glitchSound.setVolume(1);
@@ -482,12 +481,10 @@ function setupScene() {
   controls.getObject().rotation.y = Math.PI / 4;
 
   checkRoomChange(controls);
-  // Guarantee 2 pages spread across the initial grid so player always sees one
-  const startSlots = [1, 3, 5, 7]; // N, W, E, S — never center
-  for (let i = 0; i < 2; i++) {
-    const idx = startSlots[Math.floor(Math.random() * startSlots.length)];
-    spawnPageAt(idx);
-  }
+  // Guarantee 2 pages in different rooms (shuffle, take first 2)
+  const startSlots = [1, 3, 5, 7].sort(() => Math.random() - 0.5);
+  spawnPageAt(startSlots[0]);
+  spawnPageAt(startSlots[1]);
 }
 
 // ─── Pages ────────────────────────────────────────────────────────────────────
@@ -509,9 +506,9 @@ function spawnPageAt(roomIdx) {
       depthWrite: false,
     })
   );
-  // Scatter within the room so pages aren't always at the same spot
-  const offsetX = rand(-7, 7);
-  const offsetZ = rand(-7, 7);
+  // Small safe offset — keeps page accessible, away from player's exact spawn point
+  const offsetX = rand(-3, 3);
+  const offsetZ = rand(-3, 3);
   page.position.set(rp.x + offsetX, 1.65, rp.z + offsetZ);
   page.rotation.y = Math.random() * Math.PI * 2;
 
@@ -522,6 +519,36 @@ function spawnPageAt(roomIdx) {
 
   scene.add(page);
   pageMeshes.push(page);
+
+  // Spawn an entity in the room adjacent to this page — creates tension on approach
+  spawnEntityNearPage(page.position);
+}
+
+function spawnEntityNearPage(pagePos) {
+  if (activeCount() >= LEVEL_CONFIGS[currentLevel].maxEntities) return;
+
+  // For page-triggered spawns ignore cooldowns — monster always guards a page
+  const candidates = entities.filter(e => !e.active);
+  if (candidates.length === 0) return;
+
+  const ent = candidates[Math.floor(Math.random() * candidates.length)];
+
+  // Find the room nearest to the page (but not the same room — one step away)
+  let nearestIdx = -1, nearestDist = Infinity;
+  for (let i = 0; i < currentRooms.length; i++) {
+    if (i === 4) continue; // skip center
+    const rp = currentRooms[i].scene.position;
+    const d  = Math.hypot(rp.x - pagePos.x, rp.z - pagePos.z);
+    // Prefer rooms 20-40m away (adjacent, not on top of page)
+    if (d > 15 && d < nearestDist) { nearestDist = d; nearestIdx = i; }
+  }
+
+  if (nearestIdx === -1) {
+    // Fallback: any non-center room
+    nearestIdx = Math.random() < 0.5 ? 1 : 7;
+  }
+
+  spawnEntityAt(ent, nearestIdx);
 }
 
 function trySpawnPage() {
@@ -679,16 +706,12 @@ function applySanityFX() {
   if (fear > 0.7 && Math.random() < 0.02) {
     controls.getObject().rotation.z += (Math.random() - 0.5) * 0.015 * fear;
   }
-  if (breathingSound.buffer) {
-    const vol = clamp(fear * 0.7, 0, 0.7);
-    breathingSound.setVolume(vol);
-    if (vol > 0.05 && !breathingSound.isPlaying) breathingSound.play();
-    if (vol <= 0.05 && breathingSound.isPlaying)  breathingSound.stop();
-  }
 }
 
 function resetSanityFX() {
-  vignette.style.opacity = '0';
+  vignette.style.transition = '';
+  vignette.style.opacity    = '0';
+  vignette.style.background = ''; // clear death/win color override
   chromaticA.style.opacity = chromaticB.style.opacity = '0';
   noiseOverlay.style.opacity = '0';
   if (renderer) renderer.domElement.style.filter = '';
@@ -718,6 +741,10 @@ function deactivateEntity(ent) {
   ent.sprite.position.copy(limbo);
   ent.wasWatched = false;
   spawnCooldowns[ent.def.id] = ent.def.spawnCooldown;
+  // Stop chase sound when entity leaves the map
+  if (ent.def.id === 'devorador' || ent.def.id === 'vigilante') {
+    if (glitchSound?.isPlaying) glitchSound.stop();
+  }
 }
 
 function spawnEntityAt(ent, roomIdx) {
@@ -1021,7 +1048,6 @@ async function triggerDeath() {
   playerMovement = false;
   gameLost = true;
   glitchSound.stop();
-  if (breathingSound.isPlaying) breathingSound.stop();
   deathSound.play();
 
   vignette.style.transition = 'none';
@@ -1041,7 +1067,6 @@ async function triggerDeath() {
 async function triggerWin() {
   playerMovement = false;
   gameWon = true;
-  if (breathingSound.isPlaying) breathingSound.stop();
   winSound.play();
 
   if (currentLevel < MAX_LEVEL) {

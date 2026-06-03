@@ -233,26 +233,52 @@ body {
 /* ── Page compass ── */
 #pageCompass {
   position: fixed;
-  bottom: 2.2em;
+  bottom: 2em;
   right: 2em;
-  width: 40px;
-  height: 40px;
   pointer-events: none;
   z-index: 15;
   opacity: 0;
   transition: opacity 0.5s;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
 }
 #pageCompass.show { opacity: 1; }
+
+#pageCompassRing {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(255,255,255,0.08), inset 0 0 8px rgba(0,0,0,0.4);
+  /* Cardinal tick marks via background */
+  background-image:
+    linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px);
+  background-size: 46px 46px;
+  background-position: center;
+}
+
 #pageCompassArrow {
-  font-size: 1.3rem;
-  color: rgba(255,255,255,0.55);
-  text-shadow: 0 0 8px rgba(255,255,255,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transform-origin: center;
-  transition: transform 0.15s ease;
-  user-select: none;
+  transition: transform 0.12s ease;
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.6));
+}
+
+#pageCompassLabel {
+  font-family: 'Courier New', monospace;
+  font-size: 0.55rem;
+  letter-spacing: 0.18em;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
 }
 
 /* ── Crosshair ── */
