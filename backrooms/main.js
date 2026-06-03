@@ -118,6 +118,8 @@ let losRaycaster; // separate raycaster for line-of-sight checks
 
 // Pre-flattened mesh lists — rebuilt when rooms change, reused every frame
 let cachedCollisionMeshes = [];
+// BVH build queue — one geometry computed per frame to avoid stutter
+let bvhQueue = [];
 let cachedLOSMeshes = [];
 
 let currentRooms, unusedRooms, currentRoomBounds;
@@ -557,21 +559,23 @@ async function loadReserveRooms() {
 
 // Pre-flatten scene graphs into plain Mesh arrays so raycasters don't have to
 // traverse the scene hierarchy on every call (avoids O(n_nodes) traversal × N rays/frame).
-function ensureBVH(mesh) {
-  if (!mesh.geometry.boundsTree) mesh.geometry.computeBoundsTree();
-}
-
 function rebuildMeshCaches() {
   cachedCollisionMeshes = [];
   playerCollisions.forEach(s => s.traverse(o => {
-    if (o.isMesh) { ensureBVH(o); cachedCollisionMeshes.push(o); }
+    if (o.isMesh) {
+      if (!o.geometry.boundsTree && !bvhQueue.includes(o.geometry)) bvhQueue.push(o.geometry);
+      cachedCollisionMeshes.push(o);
+    }
   }));
 
   // LOS only needs the 5 rooms the player/entities actually occupy — center + 4 cardinals.
   cachedLOSMeshes = [];
   [1, 3, 4, 5, 7].forEach(i => {
     currentRooms[i]?.scene.traverse(o => {
-      if (o.isMesh) { ensureBVH(o); cachedLOSMeshes.push(o); }
+      if (o.isMesh) {
+        if (!o.geometry.boundsTree && !bvhQueue.includes(o.geometry)) bvhQueue.push(o.geometry);
+        cachedLOSMeshes.push(o);
+      }
     });
   });
 }
@@ -1253,6 +1257,9 @@ function animate() {
     controls.moveRight(-velocity.x * delta);
     controls.moveForward(-velocity.z * delta);
   }
+
+  // Build BVH one geometry per frame — eliminates stutter from lazy computation
+  if (bvhQueue.length > 0) bvhQueue.shift().computeBoundsTree();
 
   if (!gameLost && !gameWon) {
     collisionDetection();
