@@ -610,8 +610,8 @@ function setupScene() {
 function spawnPageAt(roomIdx) {
   if (pagesCollected + pageMeshes.length >= LEVEL_CONFIGS[currentLevel].pagesNeeded) return;
 
-  const rp = currentRooms[roomIdx].scene.getObjectByName('Spawn')
-    .localToWorld(new THREE.Vector3());
+  // Use room center so pages never spawn inside walls
+  const rp = currentRooms[roomIdx].scene.position;
 
   // Large bright white page — visible from across the room
   const page = new THREE.Mesh(
@@ -773,10 +773,11 @@ function spawnExit() {
   exitLight.position.set(0, 0, 0.5);
   exitMesh.add(exitLight);
 
+  // Spawn at room center (scene.position), never at Spawn point which is near walls
   let idx = Math.floor(Math.random() * 8);
   if (idx >= 4) idx++;
-  const rp = currentRooms[idx].scene.getObjectByName('Spawn').localToWorld(new THREE.Vector3());
-  exitMesh.position.set(rp.x, 1.45, rp.z);
+  const rc = currentRooms[idx].scene.position;
+  exitMesh.position.set(rc.x, 1.45, rc.z);
   scene.add(exitMesh);
 
   showHint('todas las páginas reunidas — busca la luz verde', 8000);
