@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <title>The Backrooms</title>
+    <script type="module" crossorigin src="./assets/index-8eaaac2d.js"></script>
+    <link rel="stylesheet" href="./assets/index-040c2d3a.css">
+  </head>
+  <body>
+    <!-- Pre-game intro / click-to-start -->
+    <div id="introScreen">
+      <div id="introText">
+        <p class="lore">You have no-clipped out of reality.</p>
+        <p class="lore">Level 0. The Lobby.</p>
+        <p class="lore small">Estimated square footage: 600,000,000+</p>
+        <p class="lore small">Entities present: unknown</p>
+        <div id="controls">
+          <div class="ctrl-row"><span class="key">W A S D</span><span class="ctrl-desc">moverse</span></div>
+          <div class="ctrl-row"><span class="key">MOUSE</span><span class="ctrl-desc">mirar alrededor</span></div>
+          <div class="ctrl-row"><span class="key">SHIFT</span><span class="ctrl-desc">correr (drena cordura)</span></div>
+          <div class="ctrl-row"><span class="key">ESC</span><span class="ctrl-desc">pausar / liberar cursor</span></div>
+          <div class="ctrl-objective">Recoge 5 páginas esparcidas por el mapa. Luego aparecerá la salida.</div>
+          <div class="ctrl-objective" style="margin-top:0.3em; font-size:0.65rem;">Quedarte quieto te consume. Sigue moviéndote.</div>
+          <div class="ctrl-entities">
+            <div class="entity-hint"><span class="entity-name">El Vigilante</span> — se congela si lo miras. Si le das la espalda, se acerca.</div>
+            <div class="entity-hint"><span class="entity-name">El Devorador</span> — te persigue. Dobla una esquina para que te pierda. Cuanto más miedo tienes, más rápido corre.</div>
+            <div class="entity-hint"><span class="entity-name">El Perdido</span> — deambula sin rumbo. No te acerques demasiado.</div>
+          </div>
+        </div>
+        <div id="clickPrompt">click to enter</div>
+      </div>
+    </div>
+
+    <!-- Fullscreen overlays -->
+    <div id="vignette"></div>
+    <div id="chromaticA"></div>
+    <div id="chromaticB"></div>
+    <div id="noiseOverlay"></div>
+
+    <!-- End-state screen -->
+    <div id="colorScreen"></div>
+
+    <!-- Death / Win message -->
+    <div id="endMessage"></div>
+
+    <!-- Survive timer hint (fades after show) -->
+    <div id="timerHint"></div>
+
+    <!-- Restart menu -->
+    <div id="menu">
+      <div id="time"></div>
+      <button class="menuButton" id="restart">Try Again</button>
+    </div>
+
+    <!-- Page counter -->
+    <div id="pageCounter"></div>
+
+    <!-- Page compass — arrow pointing toward nearest page -->
+    <div id="pageCompass"><div id="pageCompassArrow">▲</div></div>
+
+    <!-- Crosshair (disappears after first mouse move) -->
+    <div id="crosshair"></div>
+  </body>
+</html>
