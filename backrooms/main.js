@@ -303,7 +303,7 @@ async function init() {
   // Show loading state — user can't click yet
   const clickPrompt = document.getElementById('clickPrompt');
   clickPrompt.style.animation = 'none';
-  clickPrompt.textContent = 'cargando... (0/12)';
+  clickPrompt.textContent = 'cargando... (0/9)';
 
   introScreen.style.opacity = '1';
   introScreen.style.display = 'flex';
@@ -311,7 +311,7 @@ async function init() {
 
   try {
     await loadAssets(loaded => {
-      clickPrompt.textContent = `cargando... (${loaded}/12)`;
+      clickPrompt.textContent = `cargando... (${loaded}/9)`;
     });
   } catch (err) {
     clickPrompt.style.color = '#ff4444';
@@ -321,8 +321,9 @@ async function init() {
   }
 
   currentRooms = [room1,room2,room3,room4,room5,room6,room7,room8,room9];
-  unusedRooms  = [room10,room11,room12];
+  unusedRooms  = [];
   setupScene();
+  loadReserveRooms();
 
   // Assets ready — now enable the click-to-enter
   clickPrompt.textContent = 'haz clic para entrar';
@@ -465,13 +466,12 @@ async function loadAssets(onProgress) {
   });
   const texLoader = new THREE.TextureLoader();
 
-  // Load all room GLBs in parallel
+  // Load only the 9 rooms needed immediately; rooms 10-12 load in background after game starts
   [room1, room2, room3, room4, room5, room6,
-   room7, room8, room9, room10, room11, room12] = await Promise.all([
-    loadGLB('room1'),  loadGLB('room2'),  loadGLB('room3'),
-    loadGLB('room4'),  loadGLB('room5'),  loadGLB('room6'),
-    loadGLB('room7'),  loadGLB('room8'),  loadGLB('room9'),
-    loadGLB('room10'), loadGLB('room11'), loadGLB('room12'),
+   room7, room8, room9] = await Promise.all([
+    loadGLB('room1'), loadGLB('room2'), loadGLB('room3'),
+    loadGLB('room4'), loadGLB('room5'), loadGLB('room6'),
+    loadGLB('room7'), loadGLB('room8'), loadGLB('room9'),
   ]);
 
   // Build sprite entities
@@ -515,10 +515,31 @@ async function loadAssets(onProgress) {
   }
 }
 
+// ─── Reserve room background loader ──────────────────────────────────────────
+
+async function loadReserveRooms() {
+  const loader = new GLTFLoader();
+  try {
+    [room10, room11, room12] = await Promise.all([
+      loader.loadAsync('./models/room10.glb'),
+      loader.loadAsync('./models/room11.glb'),
+      loader.loadAsync('./models/room12.glb'),
+    ]);
+    [room10, room11, room12].forEach(r => {
+      r.scene.visible = false;
+      r.scene.position.copy(limbo);
+      scene.add(r.scene);
+    });
+    unusedRooms.push(room10, room11, room12);
+  } catch (err) {
+    console.warn('Reserve rooms failed to load:', err);
+  }
+}
+
 // ─── Scene setup ─────────────────────────────────────────────────────────────
 
 function setupScene() {
-  [room1,room2,room3,room4,room5,room6,room7,room8,room9,room10,room11,room12].forEach(r => {
+  [room1,room2,room3,room4,room5,room6,room7,room8,room9].forEach(r => {
     scene.remove(r.scene); scene.add(r.scene);
   });
   currentRooms.forEach((r, i) => r.scene.position.copy(roomPositions[i]));
