@@ -579,10 +579,9 @@ function spawnPageAt(roomIdx) {
       depthWrite: false,
     })
   );
-  // Small safe offset — keeps page accessible, away from player's exact spawn point
-  const offsetX = rand(-3, 3);
-  const offsetZ = rand(-3, 3);
-  page.position.set(rp.x + offsetX, 1.65, rp.z + offsetZ);
+  const offsetX = rand(-1.5, 1.5);
+  const offsetZ = rand(-1.5, 1.5);
+  page.position.set(rp.x + offsetX, 0.9, rp.z + offsetZ);
   page.rotation.y = Math.random() * Math.PI * 2;
 
   // Strong white light — cuts through the fog
