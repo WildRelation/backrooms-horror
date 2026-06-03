@@ -303,13 +303,22 @@ async function init() {
   // Show loading state — user can't click yet
   const clickPrompt = document.getElementById('clickPrompt');
   clickPrompt.style.animation = 'none';
-  clickPrompt.textContent = 'cargando...';
+  clickPrompt.textContent = 'cargando... (0/12)';
 
   introScreen.style.opacity = '1';
   introScreen.style.display = 'flex';
   introScreen.classList.remove('fade-out');
 
-  await loadAssets();
+  try {
+    await loadAssets(loaded => {
+      clickPrompt.textContent = `cargando... (${loaded}/12)`;
+    });
+  } catch (err) {
+    clickPrompt.style.color = '#ff4444';
+    clickPrompt.textContent = 'error al cargar — recarga la página (F5)';
+    console.error('loadAssets failed:', err);
+    return;
+  }
 
   currentRooms = [room1,room2,room3,room4,room5,room6,room7,room8,room9];
   unusedRooms  = [room10,room11,room12];
@@ -447,9 +456,13 @@ function updateRoomLights(delta, time) {
 
 // ─── Asset loading ────────────────────────────────────────────────────────────
 
-async function loadAssets() {
+async function loadAssets(onProgress) {
   const loader = new GLTFLoader();
-  const loadGLB = id => loader.loadAsync(`./models/${id}.glb`);
+  let loaded = 0;
+  const loadGLB = id => loader.loadAsync(`./models/${id}.glb`).then(glb => {
+    onProgress?.(++loaded);
+    return glb;
+  });
   const texLoader = new THREE.TextureLoader();
 
   // Load all room GLBs in parallel
