@@ -1192,13 +1192,14 @@ function animate() {
   frameCount++;
 
   if (controls.isLocked && playerMovement) {
-    velocity.x -= velocity.x * 100 * delta;
-    velocity.z -= velocity.z * 100 * delta;
+    const decay = Math.exp(-20 * delta);
+    velocity.x *= decay;
+    velocity.z *= decay;
     velocity.y  = 0;
     direction.z = Number(moveForward)  - Number(moveBackward);
     direction.x = Number(moveRight)    - Number(moveLeft);
     direction.normalize();
-    const spd = 400 * (isSprinting ? SPRINT_MULTIPLIER : 1);
+    const spd = 40 * (isSprinting ? SPRINT_MULTIPLIER : 1);
     if (moveForward  || moveBackward) velocity.z -= direction.z * spd * delta;
     if (moveLeft     || moveRight)    velocity.x -= direction.x * spd * delta;
     controls.moveRight(-velocity.x * delta);
