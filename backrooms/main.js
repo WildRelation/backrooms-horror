@@ -334,7 +334,17 @@ async function init() {
     return;
   }
 
-  currentRooms = [room1,room2,room3,room4,room5,room6,room7,room8,room9];
+  // Build BVH for all rooms async — avoids blocking the main thread at setupScene
+  const mainRooms = [room1,room2,room3,room4,room5,room6,room7,room8,room9];
+  let bvhDone = 0;
+  for (const r of mainRooms) {
+    const meshes = [];
+    r.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+    for (const m of meshes) await m.geometry.computeBoundsTreeAsync();
+    clickPrompt.textContent = `optimizando... (${++bvhDone}/9)`;
+  }
+
+  currentRooms = mainRooms;
   unusedRooms  = [];
   setupScene();
   loadReserveRooms();
@@ -542,11 +552,14 @@ async function loadReserveRooms() {
       loader.loadAsync('./models/room11.glb'),
       loader.loadAsync('./models/room12.glb'),
     ]);
-    [room10, room11, room12].forEach(r => {
+    for (const r of [room10, room11, room12]) {
       r.scene.visible = false;
       r.scene.position.copy(limbo);
       scene.add(r.scene);
-    });
+      const meshes = [];
+      r.scene.traverse(o => { if (o.isMesh) meshes.push(o); });
+      for (const m of meshes) await m.geometry.computeBoundsTreeAsync();
+    }
     unusedRooms.push(room10, room11, room12);
   } catch (err) {
     console.warn('Reserve rooms failed to load:', err);
