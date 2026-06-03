@@ -142,6 +142,7 @@ let exitSpawned    = false;
 let walkingSound, buzzingSound, glitchSound, deathSound, winSound;
 let audioLoader;
 let animFrameId = null;
+let frameCount  = 0;
 
 // Game state
 let gameActive     = false;
@@ -189,6 +190,7 @@ async function init() {
 
   gameLost = gameWon = false;
   gameActive = playerMovement = false;
+  frameCount = 0;
   pagesCollected = 0;
   pageMeshes = [];
   exitSpawned = false;
@@ -215,8 +217,12 @@ async function init() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(cfg.bgColor);
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  renderer = new THREE.WebGLRenderer({ antialias: false });
+  renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // Cap pixel ratio — on Retina screens native ratio means 4x the pixels
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  // No shadow maps — nothing in this game casts shadows
+  renderer.shadowMap.enabled = false;
   document.body.appendChild(renderer.domElement);
 
   controls  = new PointerLockControls(camera, renderer.domElement);
@@ -371,12 +377,15 @@ function initAudio() {
 
 // ─── Lights ───────────────────────────────────────────────────────────────────
 
+// Only 5 lights: center + 4 cardinal rooms (indices 1,3,4,5,7)
+// Corners share light from adjacent rooms — halves GPU light cost
+const LIGHT_ROOM_INDICES = [1, 3, 4, 5, 7];
+
 function initRoomLights(cfg) {
   roomLights = []; flickerStates = [];
-  // Higher levels flicker more aggressively
   const blackoutFreq = currentLevel === 0 ? [30,70] : currentLevel === 1 ? [18,45] : [10,28];
-  for (let i = 0; i < 9; i++) {
-    const light = new THREE.PointLight(cfg.lightColor, 0, 30);
+  for (let i = 0; i < LIGHT_ROOM_INDICES.length; i++) {
+    const light = new THREE.PointLight(cfg.lightColor, 0, 38);
     scene.add(light);
     roomLights.push(light);
     flickerStates.push({
@@ -392,10 +401,11 @@ function initRoomLights(cfg) {
 function updateRoomLights(delta, time) {
   let anyBlackout = false;
   for (let i = 0; i < roomLights.length; i++) {
-    const light = roomLights[i];
-    const st    = flickerStates[i];
-    if (currentRooms?.[i]) {
-      const rp = currentRooms[i].scene.position;
+    const light   = roomLights[i];
+    const st      = flickerStates[i];
+    const roomIdx = LIGHT_ROOM_INDICES[i];
+    if (currentRooms?.[roomIdx]) {
+      const rp = currentRooms[roomIdx].scene.position;
       light.position.set(rp.x, 3.5, rp.z);
     }
     st.stutterTimer  -= delta;
@@ -830,8 +840,12 @@ function updateDevorador(ent, delta) {
   const ecfg  = LEVEL_CONFIGS[currentLevel];
   const speed = ecfg.speedBase + fear * ecfg.speedFear;
 
-  // Line-of-sight check — can it actually see the player?
-  const canSee = hasLineOfSight(ent.sprite.position, pp);
+  // LOS is expensive — cache result for 3 frames
+  if (ent._losFrame === undefined || frameCount - ent._losFrame >= 3) {
+    ent._losCache = hasLineOfSight(ent.sprite.position, pp);
+    ent._losFrame = frameCount;
+  }
+  const canSee = ent._losCache;
 
   if (canSee) {
     // Full chase — move directly toward player
@@ -1125,6 +1139,7 @@ function animate() {
   const now   = performance.now();
   const delta = Math.min((now - prevTime) / 1000, 0.1);
   prevTime = now;
+  frameCount++;
 
   if (controls.isLocked && playerMovement) {
     velocity.x -= velocity.x * 100 * delta;
@@ -1148,8 +1163,9 @@ function animate() {
     updateSanity(delta);
     applySanityFX();
     updateEntities(delta);
-    updatePages();
-    updatePageCompass();
+    // Throttle non-critical updates — run every N frames
+    if (frameCount % 2 === 0) updatePages();
+    if (frameCount % 4 === 0) updatePageCompass();
 
     // Pulse exit
     if (exitMesh) {
