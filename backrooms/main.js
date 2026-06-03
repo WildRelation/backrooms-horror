@@ -343,7 +343,8 @@ async function init() {
   animate();
 }
 
-function onIntroClick() {
+function onIntroClick(e) {
+  if (e.target.tagName === 'INPUT') return; // slider click — don't consume the listener
   introScreen.classList.add('fade-out');
   // Must call lock() synchronously from the user gesture — setTimeout breaks it in Firefox/Safari
   controls.lock();
@@ -1308,6 +1309,9 @@ document.getElementById('volumeSlider')?.addEventListener('input', e => {
   applyVolume(v);
   syncVolumeUI(v);
 });
+// Stop slider clicks from bubbling to #introScreen and triggering onIntroClick prematurely
+document.getElementById('volumeSlider')?.addEventListener('click', e => e.stopPropagation());
+
 document.getElementById('volumeSliderMenu')?.addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   applyVolume(v);
