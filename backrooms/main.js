@@ -2,841 +2,1148 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 
-let startTime;
-let endTime;
-let elapsedTime;
-let pizzaMonster;
-let saviorPizza;
-let saviorMesh;
-let spotlight;
-let monsterIsLimbo;
-let saviorIsLimbo;
-let roomPositions;
-let limbo;
-let currentRooms;
-let unusedRooms;
-let currentRoomBounds;
-let camera
-let listener
-let raycaster
-let scene
-let renderer
-let controls
-let moveForward;
-let moveBackward;
-let moveLeft;
-let moveRight;
-let loader
-let light
-let fog;
-let playerMesh;
-let rays;
-let playerCollisions;
-let prevTime;
-let direction;
-let velocity;
-let audioLoader
-let walkingSound
-let buzzingSound
-let coughSound;
-let deathSound;
-let glitchSound;
-let winSound;
-let pizzaIntersections;
-let pizzaDir;
-let playerMovement;
-let gameLost;
-let gameWon;
-let room1;
-let room2;
-let room3;
-let room4;
-let room5;
-let room6;
-let room7;
-let room8;
-let room9;
-let room10;
-let room11;
-let room12;
+// ─── Level configs ────────────────────────────────────────────────────────────
 
-async function loadObject(id) {
-	const result = await loader.loadAsync(`./models/${id}.glb`);
-	return result;
-}
+const LEVEL_CONFIGS = [
+  {
+    name:        'Nivel 0 — The Lobby',
+    fogColor:    0xc8a84a, fogNear: 10, fogFar: 42,  // very open — easy to navigate
+    bgColor:     0x1a1500,
+    ambientColor:0x3d3010,
+    lightColor:  0xd4b060, lightMin: 18, lightMax: 28,
+    pagesNeeded: 3,
+    maxEntities: 1,
+    speedBase:   2.0, speedFear: 3.0,   // slow
+    drainIdle:   1.2, drainEntity: 14,
+    cooldowns:   { vigilante: 40, devorador: 35, perdido: 50 },
+    initCooldowns:{ vigilante: 20, devorador: 15, perdido: 25 },
+  },
+  {
+    name:        'Nivel 1 — Habitable Zone',
+    fogColor:    0x7a9a68, fogNear: 6,  fogFar: 16,
+    bgColor:     0x080e05,
+    ambientColor:0x101808,
+    lightColor:  0xa0c080, lightMin: 13, lightMax: 20,
+    pagesNeeded: 4,
+    maxEntities: 2,
+    speedBase:   3.0, speedFear: 4.5,
+    drainIdle:   1.8, drainEntity: 16,
+    cooldowns:   { vigilante: 28, devorador: 22, perdido: 35 },
+    initCooldowns:{ vigilante: 12, devorador: 10, perdido: 18 },
+  },
+  {
+    name:        'Nivel 2 — Pipe Dreams',
+    fogColor:    0x3a2808, fogNear: 4,  fogFar: 12,
+    bgColor:     0x080400,
+    ambientColor:0x100600,
+    lightColor:  0xd06018, lightMin: 10, lightMax: 16,
+    pagesNeeded: 5,
+    maxEntities: 2,
+    speedBase:   4.0, speedFear: 5.5,   // aggressive
+    drainIdle:   2.5, drainEntity: 20,
+    cooldowns:   { vigilante: 20, devorador: 16, perdido: 25 },
+    initCooldowns:{ vigilante: 8,  devorador: 6,  perdido: 12 },
+  },
+];
+
+const MAX_LEVEL = LEVEL_CONFIGS.length - 1;
+
+const ENTITY_DEFS = [
+  {
+    id: 'vigilante',
+    src: './images/entity_vigilante.png',
+    w: 2.4, h: 2.4,           // face crop — enlarged so it fills corridor
+    centerY: 1.65,             // float at eye level
+    killDist: 1.8,
+    deathMsg: 'Él te encontró.',
+    darkBg: true,
+    spawnCooldown: 25,
+  },
+  {
+    id: 'devorador',
+    src: './images/entity_devorador.png',
+    w: 2.4, h: 2.4,
+    centerY: 1.65,             // face/torso — center at eye level
+    killDist: 1.2,
+    deathMsg: 'Fuiste devorado.',
+    darkBg: false,
+    spawnCooldown: 20,
+  },
+  {
+    id: 'perdido',
+    src: './images/entity_perdido.png',
+    w: 1.7, h: 3.2,           // full body — stands on floor
+    centerY: 1.6,              // h/2 ≈ floor to crown
+    killDist: 0.7,
+    deathMsg: 'No estabas solo.',
+    darkBg: false,
+    spawnCooldown: 30,
+  },
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let scene, camera, renderer, controls;
+let raycaster;
+let prevTime;
+let direction, velocity;
+
+let moveForward, moveBackward, moveLeft, moveRight, isSprinting;
+let playerMesh, playerCollisions, allRoomGeometry;
+let rays;
+let losRaycaster; // separate raycaster for line-of-sight checks
+
+let currentRooms, unusedRooms, currentRoomBounds;
+let roomPositions, limbo;
+let room1, room2, room3, room4, room5, room6,
+    room7, room8, room9, room10, room11, room12;
+
+// Sprite entities – populated after textures load
+let entities = [];          // { def, sprite, active, state, cooldown, wasWatched, wanderTarget, wanderTimer }
+let spawnCooldowns = {};    // { vigilante: N, devorador: N, perdido: N }
+
+// Lights
+let roomLights = [];
+let flickerStates = [];
+
+// Sanity
+let sanity;
+const SANITY_DRAIN_STILL  = 5;
+const SANITY_DRAIN_SPRINT = 8;
+const SANITY_DRAIN_DARK   = 6;
+const SANITY_RECOVER      = 0.4;
+const SPRINT_MULTIPLIER   = 1.9;
+
+// Level
+let currentLevel = 0;
+let entityNearby = false;
+let inBlackout   = false;
+
+// Pages / exit
+let pagesCollected = 0;
+let pageMeshes     = [];   // active page objects in the world
+let exitMesh       = null;
+let exitSpawned    = false;
+
+// Audio
+let walkingSound, buzzingSound, breathingSound, glitchSound, deathSound, winSound;
+let audioLoader;
+let animFrameId = null;
+
+// Game state
+let gameActive     = false;
+let gameLost       = false;
+let gameWon        = false;
+let playerMovement = false;
+let startTime;
+let deathMessage   = '';
+
+// DOM
+const introScreen  = document.getElementById('introScreen');
+const vignette     = document.getElementById('vignette');
+const chromaticA   = document.getElementById('chromaticA');
+const chromaticB   = document.getElementById('chromaticB');
+const noiseOverlay = document.getElementById('noiseOverlay');
+const colorScreen  = document.getElementById('colorScreen');
+const endMessage   = document.getElementById('endMessage');
+const menuEl       = document.getElementById('menu');
+const timeEl       = document.getElementById('time');
+const timerHint    = document.getElementById('timerHint');
+const crosshairEl  = document.getElementById('crosshair');
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function rand(lo, hi)      { return lo + Math.random() * (hi - lo); }
+function sleep(ms)         { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-	//Reset dom stuff
-	let canvas = document.getElementsByTagName("canvas");
-	for (let i = 0; i < canvas.length; i++) {
-		canvas[i].remove();
-	}
-	if (renderer) {
-		renderer.dispose();
-	}
-	if (startTime != undefined) {
-		startTime = new Date();
-	}
-	document.getElementById("restart").addEventListener("click", init);
-	document.getElementById("colorScreen").style.display = "none";
-	document.getElementById("menu").style.display = "none";
-	document.getElementsByClassName("coverArt")[0].style.display = "none";
+  // Cancel previous animation loop before anything else
+  if (animFrameId !== null) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
 
+  // Stop all sounds from previous session
+  [walkingSound, buzzingSound, breathingSound, glitchSound, deathSound, winSound]
+    .forEach(s => { try { if (s?.isPlaying) s.stop(); } catch(_) {} });
 
-	//Initialize object containers
-	pizzaMonster = new THREE.Object3D();
-	saviorPizza = new THREE.Object3D();
-	saviorPizza.name = "saviorPizza";
-	saviorMesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, 3, 0.7));
-	saviorMesh.visible = false;
-	spotlight = new THREE.SpotLight( 0xffffff );
-	pizzaDir = new THREE.Vector3();
-	playerMesh = new THREE.Mesh(
-		new THREE.BoxGeometry(0.5, 2, 0.5), 
-		new THREE.MeshNormalMaterial() );
-	playerMesh.visible = false;
-	playerMesh.name = "playerMesh";
+  document.querySelectorAll('canvas').forEach(c => c.remove());
+  if (renderer) renderer.dispose();
 
-	room1 = new THREE.Object3D();
-	room2 = new THREE.Object3D();
-	room3 = new THREE.Object3D();
-	room4 = new THREE.Object3D();
-	room5 = new THREE.Object3D();
-	room6 = new THREE.Object3D();
-	room7 = new THREE.Object3D();
-	room8 = new THREE.Object3D();
-	room9 = new THREE.Object3D();
-	room10 = new THREE.Object3D();
-	room11 = new THREE.Object3D();
-	room12 = new THREE.Object3D();
+  gameLost = gameWon = false;
+  gameActive = playerMovement = false;
+  pagesCollected = 0;
+  pageMeshes = [];
+  exitSpawned = false;
+  exitMesh = null;
+  sanity = 100;
+  entityNearby = inBlackout = false;
+  entities = [];
+  const cfg = LEVEL_CONFIGS[currentLevel];
+  spawnCooldowns = { ...cfg.initCooldowns };
+  moveForward = moveBackward = moveLeft = moveRight = isSprinting = false;
 
-	//Game Stuff
-	scene = new THREE.Scene();
-	camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-	raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 25);
-	loader = new GLTFLoader();
-	renderer = new THREE.WebGLRenderer({ alpha: true });
-	renderer.setSize( window.innerWidth, window.innerHeight );
-	controls = new PointerLockControls(camera, renderer.domElement);
-	document.body.appendChild( renderer.domElement );
-	prevTime = performance.now();
-	playerMovement = true;
-	gameLost = false;
-	gameWon = false;
-	moveForward = false;
-	moveBackward = false;
-	moveLeft = false;
-	moveRight = false;
-	rays = [
-        //   Time    Degrees      words
-        new THREE.Vector3(0, 0, 1),  // 0 12:00,   0 degrees,  deep
-        new THREE.Vector3(1, 0, 1),  // 1  1:30,  45 degrees,  right deep
-        new THREE.Vector3(1, 0, 0),  // 2  3:00,  90 degress,  right
-        new THREE.Vector3(1, 0, -1), // 3  4:30, 135 degrees,  right near
-        new THREE.Vector3(0, 0, -1), // 4  6:00  180 degress,  near
-        new THREE.Vector3(-1, 0, -1),// 5  7:30  225 degrees,  left near
-        new THREE.Vector3(-1, 0, 0), // 6  9:00  270 degrees,  left
-        new THREE.Vector3(-1, 0, 1)  // 7 11:30  315 degrees,  left deep
-    ];
+  colorScreen.style.display = 'none';
+  colorScreen.className = '';
+  endMessage.style.display = 'none';
+  menuEl.style.display = 'none';
+  crosshairEl.classList.remove('hidden');
+  resetSanityFX();
+  // Reset page counter
+  const pageCounter = document.getElementById('pageCounter');
+  if (pageCounter) { pageCounter.innerHTML = ''; pageCounter.style.opacity = '0'; }
+  document.getElementById('pageCompass')?.classList.remove('show');
 
-	//Start Game Listener and other listeners
-	renderer.domElement.addEventListener("click", function () {
-			if (startTime == undefined) {
-				startTime = new Date();
-			}
-			controls.lock()
-		}
-	)
-	document.addEventListener('keydown', onKeyDown)
- 	document.addEventListener('keyup', onKeyUp)
-	
-	//Sound
-	listener = new THREE.AudioListener();
-	camera.add(listener);
-	buzzingSound = new THREE.Audio( listener );
-	walkingSound = new THREE.Audio( listener );
-	coughSound = new THREE.Audio( listener );
-	deathSound = new THREE.Audio( listener );
-	glitchSound = new THREE.Audio( listener );
-	winSound = new THREE.Audio( listener );
-	audioLoader = new THREE.AudioLoader();
-	audioLoader.load( "./sounds/walking.mp3", function( buffer ) {
-		walkingSound.setBuffer( buffer );
-		walkingSound.setLoop( true );
-		walkingSound.setVolume( 0.6 );
-	});
-	audioLoader.load( "./sounds/buzzing.mp3", function( buffer ) {
-		buzzingSound.setBuffer( buffer );
-		buzzingSound.setLoop( true );
-		buzzingSound.setVolume( 0.05 );
-		buzzingSound.play();
-	});
-	audioLoader.load( "./sounds/cough.mp3", function( buffer ) {
-		coughSound.setBuffer( buffer );
-		coughSound.setLoop( false );
-		coughSound.setVolume( 0.5 );
-	});
-	audioLoader.load( "./sounds/death.mp3", function( buffer ) {
-		deathSound.setBuffer( buffer );
-		deathSound.setLoop( false );
-		deathSound.setVolume( 0.8 );
-	});
-	audioLoader.load( "./sounds/glitch.mp3", function( buffer ) {
-		glitchSound.setBuffer( buffer );
-		glitchSound.setLoop( false );
-		glitchSound.setVolume( 1 );
-	});
-	audioLoader.load( "./sounds/win.mp3", function( buffer ) {
-		winSound.setBuffer( buffer );
-		winSound.setLoop( false );
-		winSound.setVolume( 1 );
-	});
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(cfg.bgColor);
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  renderer = new THREE.WebGLRenderer({ antialias: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
 
-	//Ambient light
-	light = new THREE.AmbientLight( 0x404040, 50 ); // soft white light
-	fog = new THREE.Fog( 0xcccccc, 15, 30);
-	scene.fog = fog;
-	scene.add( light );
+  controls  = new PointerLockControls(camera, renderer.domElement);
+  raycaster    = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 25);
+  losRaycaster = new THREE.Raycaster();
+  prevTime  = performance.now();
+  direction = new THREE.Vector3();
+  velocity  = new THREE.Vector3();
 
-	direction = new THREE.Vector3();
-	velocity = new THREE.Vector3();
+  // Collision rays
+  rays = [
+    new THREE.Vector3( 0,0, 1), new THREE.Vector3( 1,0, 1),
+    new THREE.Vector3( 1,0, 0), new THREE.Vector3( 1,0,-1),
+    new THREE.Vector3( 0,0,-1), new THREE.Vector3(-1,0,-1),
+    new THREE.Vector3(-1,0, 0), new THREE.Vector3(-1,0, 1),
+  ];
 
-	//Init roomPositions
-	roomPositions = [
-		new THREE.Vector3(-25.6, 0, -25.6),
-		new THREE.Vector3(0, 0, -25.6),
-		new THREE.Vector3(25.6, 0, -25.6),
-		new THREE.Vector3(-25.6, 0, 0),
-		new THREE.Vector3(0,0,0),
-		new THREE.Vector3(25.6, 0, 0),
-		new THREE.Vector3(-25.6, 0, 25.6),
-		new THREE.Vector3(0, 0, 25.6),
-		new THREE.Vector3(25.6, 0, 25.6)
-	];
+  // Invisible player hitbox
+  playerMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 2, 0.5),
+    new THREE.MeshNormalMaterial()
+  );
+  playerMesh.visible = false;
+  playerMesh.name = 'playerMesh';
+  scene.add(playerMesh);
 
-	limbo = new THREE.Vector3(0, -5, 0);
+  // Fog – yellowish, tight
+  scene.fog = new THREE.Fog(cfg.fogColor, cfg.fogNear, cfg.fogFar);
 
-	//Init Room
-	currentRoomBounds = [-25.3, 25.3, 0.3, -0.3]; //N,E,S,W
-	
+  // Lighting
+  scene.add(new THREE.AmbientLight(cfg.ambientColor, 0.8));
+  initRoomLights(cfg);
 
-	//Start animation
-	document.getElementsByClassName("coverArt")[0].style.display = "block";
+  // Room grid
+  roomPositions = [
+    new THREE.Vector3(-25.6, 0,-25.6), new THREE.Vector3(0, 0,-25.6), new THREE.Vector3(25.6, 0,-25.6),
+    new THREE.Vector3(-25.6, 0,  0),   new THREE.Vector3(0, 0,  0),   new THREE.Vector3(25.6, 0,  0),
+    new THREE.Vector3(-25.6, 0, 25.6), new THREE.Vector3(0, 0, 25.6), new THREE.Vector3(25.6, 0, 25.6),
+  ];
+  limbo = new THREE.Vector3(0, -500, 0);
+  currentRoomBounds = [-25.3, 25.3, 0.3, -0.3];
 
-	//Load assets into game
-	await loadAssets();
+  room1  = new THREE.Object3D(); room2  = new THREE.Object3D(); room3  = new THREE.Object3D();
+  room4  = new THREE.Object3D(); room5  = new THREE.Object3D(); room6  = new THREE.Object3D();
+  room7  = new THREE.Object3D(); room8  = new THREE.Object3D(); room9  = new THREE.Object3D();
+  room10 = new THREE.Object3D(); room11 = new THREE.Object3D(); room12 = new THREE.Object3D();
 
-	currentRooms = [
-		room1,
-		room2,
-		room3,
-		room4,
-		room5,
-		room6,
-		room7,
-		room8,
-		room9
-	];
+  initAudio();
 
-	unusedRooms = [
-		room10,
-		room11,
-		room12
-	]
+  // Remove first to avoid duplicate listeners on restart
+  document.removeEventListener('keydown', onKeyDown);
+  document.removeEventListener('keyup',   onKeyUp);
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup',   onKeyUp);
+  renderer.domElement.addEventListener('mousemove', () => {
+    setTimeout(() => crosshairEl.classList.add('hidden'), 3000);
+  }, { once: true });
 
-	//Player Collisions
-	playerCollisions = [
-		currentRooms[4].scene
-	]
+  controls.addEventListener('lock',   onControlsLock);
+  controls.addEventListener('unlock', onControlsUnlock);
 
-	//Post load stuff
-	scene.remove(pizzaMonster.scene);
-	scene.remove(saviorPizza.scene);
-	scene.remove(saviorMesh);
-	scene.remove(spotlight);
-	scene.remove(playerMesh);
-	for (let i = 0; i < currentRooms.length; i++) {
-		scene.remove(currentRooms[i].scene);
-	}
-	for (let i = 0; i < unusedRooms.length; i++) {
-		scene.remove(unusedRooms[i].scene);
-	}
+  // Show loading state — user can't click yet
+  const clickPrompt = document.getElementById('clickPrompt');
+  clickPrompt.style.animation = 'none';
+  clickPrompt.textContent = 'cargando...';
 
-	//Add scenes and set visibility to false of limbo objects
-	pizzaMonster.scene.visible = false;
-	scene.add(pizzaMonster.scene);
-	spotlight.visible = false;
-	scene.add(spotlight);
-	saviorPizza.scene.visible = false;
-	scene.add(saviorPizza.scene);
-	scene.add(saviorMesh);
-	scene.add(playerMesh);
-	for (let i = 0; i < currentRooms.length; i++) {
-		scene.add(currentRooms[i].scene);
-	}
-	for (let i = 0; i < unusedRooms.length; i++) {
-		unusedRooms[i].scene.visible = false;
-		scene.add(unusedRooms[i].scene);
-	}
+  introScreen.style.opacity = '1';
+  introScreen.style.display = 'flex';
+  introScreen.classList.remove('fade-out');
 
-	currentRooms[0].scene.position.copy(roomPositions[0]);
-	currentRooms[1].scene.position.copy(roomPositions[1]);
-	currentRooms[2].scene.position.copy(roomPositions[2]);
-	currentRooms[3].scene.position.copy(roomPositions[3]);
-	currentRooms[4].scene.position.copy(roomPositions[4]);
-	currentRooms[5].scene.position.copy(roomPositions[5]);
-	currentRooms[6].scene.position.copy(roomPositions[6]);
-	currentRooms[7].scene.position.copy(roomPositions[7]);
-	currentRooms[8].scene.position.copy(roomPositions[8]);
+  await loadAssets();
 
-	for (let i = 0; i < unusedRooms.length; i++) {
-		unusedRooms[i].scene.position.copy(limbo);
-	}
+  currentRooms = [room1,room2,room3,room4,room5,room6,room7,room8,room9];
+  unusedRooms  = [room10,room11,room12];
+  setupScene();
 
-	pizzaMonster.scene.position.copy(limbo);
-	spotlight.position.copy(limbo);
-	saviorMesh.position.copy(limbo);
-	saviorPizza.scene.position.copy(limbo);
-	monsterIsLimbo = true;
-	saviorIsLimbo = true;
+  // Assets ready — now enable the click-to-enter
+  clickPrompt.textContent = 'haz clic para entrar';
+  clickPrompt.style.animation = '';
 
+  introScreen.addEventListener('click', onIntroClick, { once: true });
+  renderer.domElement.addEventListener('click', onCanvasClick);
 
-	//Initial Camera Position
-	controls.getObject().position.copy(currentRooms[1].scene.getObjectByName("Spawn").localToWorld(new THREE.Vector3()));
-	controls.getObject().position.y = 1.65;
-	controls.getObject().rotation.y = Math.PI/4;
-	
-	checkRoomChange(controls);
-	updatePizzaIntersections();
-	
-
-	//Stop animation
-	document.getElementsByClassName("coverArt")[0].style.display = "none";
-
-	//First animation loop
-	animate();
+  animate();
 }
+
+function onIntroClick() {
+  introScreen.classList.add('fade-out');
+  // Must call lock() synchronously from the user gesture — setTimeout breaks it in Firefox/Safari
+  controls.lock();
+  setTimeout(() => { introScreen.style.display = 'none'; }, 1300);
+}
+function onCanvasClick() {
+  // Re-lock whenever pointer is free and game isn't over — covers fullscreen transitions too
+  if (!controls.isLocked && !gameLost && !gameWon) controls.lock();
+}
+function onControlsLock() {
+  if (!startTime) startTime = performance.now();
+  gameActive = playerMovement = true;
+  timerHint.classList.remove('show'); // hide "haz clic" hint immediately on lock
+  if (pagesCollected === 0) {
+    const cfg = LEVEL_CONFIGS[currentLevel];
+    showHint(`${cfg.name} — busca las páginas blancas`, 5000);
+    updatePageCounter();
+  }
+}
+function onControlsUnlock() {
+  if (!gameLost && !gameWon) {
+    playerMovement = false;
+    if (gameActive) showHint('haz clic para continuar', 99999); // stays until re-locked
+  }
+}
+
+function showHint(text, ms) {
+  timerHint.textContent = text;
+  timerHint.classList.add('show');
+  setTimeout(() => timerHint.classList.remove('show'), ms);
+}
+
+// ─── Audio ────────────────────────────────────────────────────────────────────
+
+function initAudio() {
+  const listener = new THREE.AudioListener();
+  camera.add(listener);
+  audioLoader = new THREE.AudioLoader();
+
+  walkingSound   = new THREE.Audio(listener);
+  buzzingSound   = new THREE.Audio(listener);
+  breathingSound = new THREE.Audio(listener);
+  glitchSound    = new THREE.Audio(listener);
+  deathSound     = new THREE.Audio(listener);
+  winSound       = new THREE.Audio(listener);
+
+  audioLoader.load('./sounds/walking.mp3', buf => {
+    walkingSound.setBuffer(buf); walkingSound.setLoop(true); walkingSound.setVolume(0.5);
+  });
+  audioLoader.load('./sounds/buzzing.mp3', buf => {
+    buzzingSound.setBuffer(buf); buzzingSound.setLoop(true); buzzingSound.setVolume(0.06);
+    buzzingSound.play();
+  });
+  audioLoader.load('./sounds/cough.mp3', buf => {
+    breathingSound.setBuffer(buf); breathingSound.setLoop(true); breathingSound.setVolume(0);
+  });
+  audioLoader.load('./sounds/glitch.mp3', buf => {
+    glitchSound.setBuffer(buf); glitchSound.setLoop(false); glitchSound.setVolume(1);
+  });
+  audioLoader.load('./sounds/death.mp3', buf => {
+    deathSound.setBuffer(buf); deathSound.setLoop(false); deathSound.setVolume(0.9);
+  });
+  audioLoader.load('./sounds/win.mp3', buf => {
+    winSound.setBuffer(buf); winSound.setLoop(false); winSound.setVolume(1);
+  });
+}
+
+// ─── Lights ───────────────────────────────────────────────────────────────────
+
+function initRoomLights(cfg) {
+  roomLights = []; flickerStates = [];
+  // Higher levels flicker more aggressively
+  const blackoutFreq = currentLevel === 0 ? [30,70] : currentLevel === 1 ? [18,45] : [10,28];
+  for (let i = 0; i < 9; i++) {
+    const light = new THREE.PointLight(cfg.lightColor, 0, 30);
+    scene.add(light);
+    roomLights.push(light);
+    flickerStates.push({
+      baseIntensity: rand(cfg.lightMin, cfg.lightMax),
+      phase: rand(0, Math.PI * 2),
+      freq: rand(0.8, 2.2),
+      stutterTimer: rand(4, 12), stutterActive: false, stutterDuration: 0,
+      blackoutTimer: rand(...blackoutFreq), blackoutActive: false, blackoutDuration: 0,
+    });
+  }
+}
+
+function updateRoomLights(delta, time) {
+  let anyBlackout = false;
+  for (let i = 0; i < roomLights.length; i++) {
+    const light = roomLights[i];
+    const st    = flickerStates[i];
+    if (currentRooms?.[i]) {
+      const rp = currentRooms[i].scene.position;
+      light.position.set(rp.x, 3.5, rp.z);
+    }
+    st.stutterTimer  -= delta;
+    st.blackoutTimer -= delta;
+    if (st.stutterTimer  <= 0) { st.stutterActive = true;  st.stutterDuration = rand(0.05,0.25); st.stutterTimer  = rand(2,10); }
+    if (st.blackoutTimer <= 0) { st.blackoutActive = true;  st.blackoutDuration = rand(0.3,1.4);  st.blackoutTimer = rand(15,50); }
+
+    if (st.blackoutActive) {
+      st.blackoutDuration -= delta; light.intensity = 0; anyBlackout = true;
+      if (st.blackoutDuration <= 0) st.blackoutActive = false;
+      continue;
+    }
+    if (st.stutterActive) {
+      st.stutterDuration -= delta;
+      light.intensity = Math.random() < 0.5 ? 0 : st.baseIntensity * 0.4;
+      if (st.stutterDuration <= 0) st.stutterActive = false;
+      continue;
+    }
+    light.intensity = st.baseIntensity * (Math.sin(time * st.freq + st.phase) * 0.08 + 1.0);
+  }
+  inBlackout = anyBlackout;
+}
+
+// ─── Asset loading ────────────────────────────────────────────────────────────
 
 async function loadAssets() {
-	//Load objects
-	pizzaMonster = await loadObject("pizzaMonster");
-	pizzaMonster.scene.name = "pizzaMonster";
-	saviorPizza = await loadObject("saviorPizza");
-	saviorPizza.scene.name = "saviorPizza";
-	room1 = await loadObject("room1");
-	room2 = await loadObject("room2");
-	room3 = await loadObject("room3");
-	room4 = await loadObject("room4");
-	room5 = await loadObject("room5");
-	room6 = await loadObject("room6");
-	room7 = await loadObject("room7");
-	room8 = await loadObject("room8");
-	room9 = await loadObject("room9");
-	room10 = await loadObject("room10");
-	room11 = await loadObject("room11");
-	room12 = await loadObject("room12");
+  const loader = new GLTFLoader();
+  const loadGLB = id => loader.loadAsync(`./models/${id}.glb`);
+  const texLoader = new THREE.TextureLoader();
+
+  // Load all room GLBs in parallel
+  [room1, room2, room3, room4, room5, room6,
+   room7, room8, room9, room10, room11, room12] = await Promise.all([
+    loadGLB('room1'),  loadGLB('room2'),  loadGLB('room3'),
+    loadGLB('room4'),  loadGLB('room5'),  loadGLB('room6'),
+    loadGLB('room7'),  loadGLB('room8'),  loadGLB('room9'),
+    loadGLB('room10'), loadGLB('room11'), loadGLB('room12'),
+  ]);
+
+  // Build sprite entities
+  for (const def of ENTITY_DEFS) {
+    const texture = await texLoader.loadAsync(def.src);
+
+    let material;
+    if (def.darkBg) {
+      // Additive blending: dark background vanishes, bright face glows through
+      material = new THREE.SpriteMaterial({
+        map: texture,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        color: 0xffffff,
+      });
+    } else {
+      material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        alphaTest: 0.08,
+        depthWrite: false,
+      });
+    }
+
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(def.w, def.h, 1);
+    sprite.name = def.id;
+    sprite.visible = false;
+    sprite.position.copy(limbo);
+    scene.add(sprite);
+
+    entities.push({
+      def,
+      sprite,
+      active:      false,
+      state:       'idle',
+      wasWatched:  false,
+      wanderTarget: new THREE.Vector3(),
+      wanderTimer:  0,
+    });
+  }
 }
 
-await init();
+// ─── Scene setup ─────────────────────────────────────────────────────────────
 
+function setupScene() {
+  [room1,room2,room3,room4,room5,room6,room7,room8,room9,room10,room11,room12].forEach(r => {
+    scene.remove(r.scene); scene.add(r.scene);
+  });
+  currentRooms.forEach((r, i) => r.scene.position.copy(roomPositions[i]));
+  unusedRooms.forEach(r => { r.scene.visible = false; r.scene.position.copy(limbo); });
+  // Only center room — adjacent room walls block doorways if we include them
+  playerCollisions  = [currentRooms[4].scene];
+  allRoomGeometry   = currentRooms.map(r => r.scene);
 
-//Camera Controls
-function onKeyDown(event) {
-	switch (event.code) {
-		case 'ArrowUp':
-		case 'KeyW':
-			if (!walkingSound.isPlaying) {
-				walkingSound.play();
-			}
-			moveForward = true;
-			break;
-		case 'ArrowLeft':
-		case 'KeyA':
-			if (!walkingSound.isPlaying) {
-				walkingSound.play();
-			}
-			moveLeft = true;
-			break;
-		case 'ArrowDown':
-		case 'KeyS':
-			if (!walkingSound.isPlaying) {
-				walkingSound.play();
-			}
-			moveBackward = true;
-			break;
-		case 'ArrowRight':
-		case 'KeyD':
-			if (!walkingSound.isPlaying) {
-				walkingSound.play();
-			}
-			moveRight = true;
-			break;
-		case 'Space':
-			coughSound.play();
-			console.log(controls.getObject().position);
-			break;
-	}
- }
- function onKeyUp(event) {
-	switch (event.code) {
-		case 'ArrowUp':
-		case 'KeyW':
-			if (!moveLeft && !moveRight && !moveBackward) {
-				walkingSound.stop();
-			}
-			moveForward = false
-			break
-		case 'ArrowLeft':
-		case 'KeyA':
-			if (!moveForward && !moveBackward && !moveRight) {
-				walkingSound.stop();
-			}
-			moveLeft = false
-			break
-		case 'ArrowDown':
-		case 'KeyS':
-			if (!moveForward && !moveRight && !moveLeft) {
-				walkingSound.stop();
-			}
-			moveBackward = false
-			break
-		case 'ArrowRight':
-		case 'KeyD':
-			if (!moveForward && !moveBackward && !moveLeft) {
-				walkingSound.stop();
-			}
-			moveRight = false
-			break
-	}
- }
+  const spawnWorld = currentRooms[1].scene.getObjectByName('Spawn')
+    .localToWorld(new THREE.Vector3());
+  controls.getObject().position.set(spawnWorld.x, 1.65, spawnWorld.z);
+  controls.getObject().rotation.y = Math.PI / 4;
 
- //Room Changing Functions
- function checkAndUpdateSaviorPizza() {
-	let pizzaLocation = saviorPizza.scene.position;
-	let northBound = currentRooms[0].scene.position.z;
-	let southBound = currentRooms[6].scene.position.z;
-	let eastBound = currentRooms[2].scene.position.x;
-	let westBound = currentRooms[0].scene.position.x;
-	if (pizzaLocation.z < northBound - 25.3 ||
-		pizzaLocation.z > southBound ||
-		pizzaLocation.x > eastBound +25.3 ||
-		pizzaLocation.x < westBound) {
-			saviorIsLimbo = true;
-			saviorPizza.scene.visible = false;
-			spotlight.visible = false;
-			saviorPizza.scene.position.copy(limbo);
-			spotlight.position.copy(limbo);
-			saviorMesh.position.copy(limbo);
-	}
-	let max = 4;
-	let min = 1;
-	let randInt = Math.floor(Math.random() * (max - min + 1)) + min;
-	if (randInt == 1 && saviorIsLimbo) {
-		let pizzaPosition;
-		let pizzaVector = new THREE.Vector3();
-		let randRoom = Math.floor(Math.random() * (7 - 0 + 1) + 0); //Picks a random room but not the center
-		if (randRoom >= 4) {
-			randRoom += 1;
-		}
-		pizzaPosition = currentRooms[randRoom].scene.getObjectByName("Spawn").localToWorld(pizzaVector);
-		pizzaPosition.y = 0;
-		saviorPizza.scene.visible = true;
-		spotlight.visible = true;
-		saviorPizza.scene.position.copy(pizzaPosition);
-		saviorMesh.position.copy(pizzaPosition);
-		saviorMesh.position.y = 1.5;
-		spotlight.position.copy(saviorPizza.scene.position);
-		spotlight.position.y = 2.5;
-		spotlight.target = saviorPizza.scene;
-		spotlight.power = 40;
-		spotlight.angle = Math.PI/8;
-		saviorIsLimbo = false;
-	}
- }
-
- function checkAndUpdatePizzaMonster() {
-	let pizzaLocation = pizzaMonster.scene.position;
-	let northBound = currentRooms[0].scene.position.z;
-	let southBound = currentRooms[6].scene.position.z;
-	let eastBound = currentRooms[2].scene.position.x;
-	let westBound = currentRooms[0].scene.position.x;
-	if (pizzaLocation.z < northBound - 25.3 ||
-		pizzaLocation.z > southBound ||
-		pizzaLocation.x > eastBound +25.3 ||
-		pizzaLocation.x < westBound) {
-			monsterIsLimbo = true;
-			pizzaMonster.scene.visible = false;
-			pizzaMonster.scene.position.copy(limbo);
-	}
-	let max = 3;
-	let min = 1;
-	let randInt = Math.floor(Math.random() * (max - min + 1)) + min;
-	if (randInt == 1 && monsterIsLimbo) {
-		let pizzaPosition;
-		let pizzaVector = new THREE.Vector3();
-		let randRoom = Math.floor(Math.random() * (7 - 0 + 1) + 0); //Picks a random room but not the center
-		if (randRoom >= 4) {
-			randRoom += 1;
-		}
-		pizzaPosition = currentRooms[randRoom].scene.getObjectByName("Spawn").localToWorld(pizzaVector);
-		pizzaPosition.y = 1.65;
-		pizzaMonster.scene.visible = true;
-		pizzaMonster.scene.position.copy(pizzaPosition);
-		monsterIsLimbo = false;
-	} else {
-		checkAndUpdateSaviorPizza();
-	}
+  checkRoomChange(controls);
+  // Guarantee 2 pages spread across the initial grid so player always sees one
+  const startSlots = [1, 3, 5, 7]; // N, W, E, S — never center
+  for (let i = 0; i < 2; i++) {
+    const idx = startSlots[Math.floor(Math.random() * startSlots.length)];
+    spawnPageAt(idx);
+  }
 }
 
-function updateRooms(direction) {
-	let oldZ;
-	let oldX;
-	let newZ;
-	let newX;
-	let goners;
-	switch(direction) {
-		case "North":
-			oldZ = currentRooms[6].scene.position.z;
-			oldX = currentRooms[6].scene.position.x;
-			goners = currentRooms.splice(6,3);
-			for (let i = 0; i < goners.length; i++) {
-				unusedRooms.push(goners[i]);
-				goners[i].scene.visible = false;
-				goners[i].scene.position.copy(limbo);
-			}
-			newZ = oldZ - (25.6*3);
-			for (let i = 3 - 1; i >= 0; i--) {
-				let room = Math.floor(Math.random() * unusedRooms.length);
-				let location = new THREE.Vector3(oldX + (i*25.6), 0, newZ);
-				unusedRooms[room].scene.position.copy(location);
-				unusedRooms[room].scene.visible = true;
-				currentRooms.unshift(unusedRooms.splice(room,1)[0]);
-			}
-			break;
+// ─── Pages ────────────────────────────────────────────────────────────────────
 
-		case "South":
-			oldZ = currentRooms[0].scene.position.z;
-			oldX = currentRooms[0].scene.position.x;
-			goners = currentRooms.splice(0,3);
-			for (let i = 0; i < goners.length; i++) {
-				unusedRooms.push(goners[i]);
-				goners[i].scene.visible = false;
-				goners[i].scene.position.copy(limbo);
-			}
-			newZ = oldZ + (25.6*3);
-			for (let i = 0; i < 3; i++) {
-				let room = Math.floor(Math.random() * unusedRooms.length);
-				let location = new THREE.Vector3(oldX + (i*25.6), 0, newZ);
-				unusedRooms[room].scene.position.copy(location);
-				unusedRooms[room].scene.visible = true;
-				currentRooms.push(unusedRooms.splice(room,1)[0]);
-			}
-			break;
+function spawnPageAt(roomIdx) {
+  if (pagesCollected + pageMeshes.length >= LEVEL_CONFIGS[currentLevel].pagesNeeded) return;
 
-		case "East":
-			oldZ = currentRooms[0].scene.position.z;
-			oldX = currentRooms[0].scene.position.x;
-			unusedRooms.push(currentRooms.splice(6,1)[0]);
-			unusedRooms[unusedRooms.length - 1].scene.visible = false;
-			unusedRooms[unusedRooms.length - 1].scene.position.copy(limbo);
-			unusedRooms.push(currentRooms.splice(3,1)[0]);
-			unusedRooms[unusedRooms.length - 1].scene.visible = false;
-			unusedRooms[unusedRooms.length - 1].scene.position.copy(limbo);
-			unusedRooms.push(currentRooms.splice(0,1)[0]);
-			unusedRooms[unusedRooms.length - 1].scene.visible = false;
-			unusedRooms[unusedRooms.length - 1].scene.position.copy(limbo);
-			newX = oldX + (25.6*3);
-			for (let i = 0; i < 3; i++) {
-				let room = Math.floor(Math.random() * unusedRooms.length);
-				let location = new THREE.Vector3(newX, 0, oldZ + (i*25.6));
-				unusedRooms[room].scene.position.copy(location);
-				unusedRooms[room].scene.visible = true;
-				switch(i) {
-					case 0:
-						currentRooms.splice(2, 0, unusedRooms.splice(room, 1)[0]);
-						break;
-					case 1:
-						currentRooms.splice(5, 0, unusedRooms.splice(room, 1)[0]);
-						break;
-					case 2:
-						currentRooms.splice(8, 0, unusedRooms.splice(room, 1)[0]);
-						break;
-				}
-			}
-			break;
+  const rp = currentRooms[roomIdx].scene.getObjectByName('Spawn')
+    .localToWorld(new THREE.Vector3());
 
-		case "West":
-			oldZ = currentRooms[2].scene.position.z;
-			oldX = currentRooms[2].scene.position.x;
-			unusedRooms.push(currentRooms.splice(8,1)[0]);
-			unusedRooms[unusedRooms.length - 1].scene.visible = false;
-			unusedRooms[unusedRooms.length - 1].scene.position.copy(limbo);
-			unusedRooms.push(currentRooms.splice(5,1)[0]);
-			unusedRooms[unusedRooms.length - 1].scene.visible = false;
-			unusedRooms[unusedRooms.length - 1].scene.position.copy(limbo);
-			unusedRooms.push(currentRooms.splice(2,1)[0]);
-			unusedRooms[unusedRooms.length - 1].scene.visible = false;
-			unusedRooms[unusedRooms.length - 1].scene.position.copy(limbo);
-			newX = oldX - (25.6*3);
-			for (let i = 0; i < 3; i++) {
-				let room = Math.floor(Math.random() * unusedRooms.length);
-				let location = new THREE.Vector3(newX, 0, oldZ + (i*25.6));
-				unusedRooms[room].scene.position.copy(location);
-				unusedRooms[room].scene.visible = true;
-				switch(i) {
-					case 0:
-						currentRooms.splice(0, 0, unusedRooms.splice(room, 1)[0]);
-						break;
-					case 1:
-						currentRooms.splice(3, 0, unusedRooms.splice(room, 1)[0]);
-						break;
-					case 2:
-						currentRooms.splice(6, 0, unusedRooms.splice(room, 1)[0]);
-						break;
-				}
-			}
-			break;
-	}
-	updatePlayerCollisions();
+  // Large bright white page — visible from across the room
+  const page = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 1.4),
+    new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: new THREE.Color(0xffffff),
+      emissiveIntensity: 2.5,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  // Scatter within the room so pages aren't always at the same spot
+  const offsetX = rand(-7, 7);
+  const offsetZ = rand(-7, 7);
+  page.position.set(rp.x + offsetX, 1.65, rp.z + offsetZ);
+  page.rotation.y = Math.random() * Math.PI * 2;
+
+  // Strong white light — cuts through the fog
+  const pageLight = new THREE.PointLight(0xffffff, 22, 12);
+  pageLight.position.set(0, 0, 0);
+  page.add(pageLight);
+
+  scene.add(page);
+  pageMeshes.push(page);
 }
 
-function updateRoomBounds(direction) {
-	switch(direction) {
-		case "North":
-			currentRoomBounds[0] -= 25.6;
-			currentRoomBounds[2] -= 25.6;
-			break;
-		case "South":
-			currentRoomBounds[0] += 25.6;
-			currentRoomBounds[2] += 25.6;
-			break;
-		case "East":
-			currentRoomBounds[1] += 25.6;
-			currentRoomBounds[3] += 25.6;
-			break;
-		case "West":
-			currentRoomBounds[1] -= 25.6;
-			currentRoomBounds[3] -= 25.6;
-			break;
-	}
+function trySpawnPage() {
+  if (pageMeshes.length >= 2) return;
+  if (pagesCollected + pageMeshes.length >= LEVEL_CONFIGS[currentLevel].pagesNeeded) return;
+  if (Math.random() > 0.75) return; // 75% chance per room transition
+
+  let idx = Math.floor(Math.random() * 8);
+  if (idx >= 4) idx++;
+  spawnPageAt(idx);
 }
 
-function updatePizzaIntersections() {
-	pizzaIntersections = [];
-	for (let i = 0; i < currentRooms.length; i++) {
-		pizzaIntersections.push(currentRooms[i].scene);
-	}
-	pizzaIntersections.push(playerMesh);
+function updatePages() {
+  if (!gameActive) return;
+  const pp  = controls.getObject().position;
+  const now = performance.now();
+
+  for (let i = pageMeshes.length - 1; i >= 0; i--) {
+    const page = pageMeshes[i];
+    page.rotation.y += 0.018;
+    page.position.y  = 1.65 + Math.sin(now / 500 + i) * 0.12; // hover at eye level
+
+    if (pp.distanceTo(page.position) < 1.5) {
+      scene.remove(page);
+      pageMeshes.splice(i, 1);
+      pagesCollected++;
+      updatePageCounter();
+
+      if (pagesCollected >= LEVEL_CONFIGS[currentLevel].pagesNeeded) {
+        spawnExit();
+      } else {
+        showHint(`página ${pagesCollected} de ${LEVEL_CONFIGS[currentLevel].pagesNeeded} encontrada`, 3000);
+        spawnCooldowns['devorador'] = Math.max(0, (spawnCooldowns['devorador'] ?? 0) - 5);
+      }
+    }
+  }
+}
+
+function updatePageCounter() {
+  const el = document.getElementById('pageCounter');
+  if (!el) return;
+  const n = LEVEL_CONFIGS[currentLevel].pagesNeeded;
+  const dots = Array.from({ length: n }, (_, i) =>
+    `<span class="${i < pagesCollected ? 'dot filled' : 'dot'}">${i < pagesCollected ? '●' : '○'}</span>`
+  ).join('');
+  el.innerHTML = dots;
+  el.style.opacity = '1';
+}
+
+function updatePageCompass() {
+  const compass = document.getElementById('pageCompass');
+  const arrow   = document.getElementById('pageCompassArrow');
+  if (!compass || !arrow || !gameActive) return;
+
+  if (pageMeshes.length === 0 || exitMesh) {
+    compass.classList.remove('show');
+    return;
+  }
+
+  // Find nearest page
+  const pp = controls.getObject().position;
+  let nearest = null, nearestDist = Infinity;
+  for (const p of pageMeshes) {
+    const d = pp.distanceTo(p.position);
+    if (d < nearestDist) { nearestDist = d; nearest = p; }
+  }
+  if (!nearest) { compass.classList.remove('show'); return; }
+
+  // Compute angle from camera forward to page (horizontal only)
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+  camDir.y = 0; camDir.normalize();
+
+  const toPage = nearest.position.clone().sub(pp);
+  toPage.y = 0; toPage.normalize();
+
+  // Angle between camera forward and direction to page
+  const angle = Math.atan2(
+    camDir.x * toPage.z - camDir.z * toPage.x,  // cross product z
+    camDir.x * toPage.x + camDir.z * toPage.z   // dot product
+  );
+
+  compass.classList.add('show');
+  arrow.style.transform = `rotate(${angle}rad)`;
+}
+
+// ─── Exit ─────────────────────────────────────────────────────────────────────
+
+function spawnExit() {
+  if (exitMesh) return;
+
+  // Bright green door — unmistakably different from yellow environment
+  exitMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 2.9, 0.12),
+    new THREE.MeshStandardMaterial({
+      color: 0x00ff88,
+      emissive: new THREE.Color(0x00ff88),
+      emissiveIntensity: 1.2,
+    })
+  );
+  exitMesh.name = 'exit';
+
+  // Strong green light so it's visible through fog
+  const exitLight = new THREE.PointLight(0x00ff88, 25, 18);
+  exitLight.position.set(0, 0, 0.5);
+  exitMesh.add(exitLight);
+
+  let idx = Math.floor(Math.random() * 8);
+  if (idx >= 4) idx++;
+  const rp = currentRooms[idx].scene.getObjectByName('Spawn').localToWorld(new THREE.Vector3());
+  exitMesh.position.set(rp.x, 1.45, rp.z);
+  scene.add(exitMesh);
+
+  showHint('todas las páginas reunidas — busca la luz verde', 8000);
+}
+
+// ─── Sanity ───────────────────────────────────────────────────────────────────
+
+function updateSanity(delta) {
+  if (!gameActive) return;
+  const lcfg = LEVEL_CONFIGS[currentLevel];
+  let drain = lcfg.drainIdle;
+
+  // Standing still is dangerous — you have to keep moving
+  const isMoving = moveForward || moveBackward || moveLeft || moveRight;
+  if (!isMoving)   drain += SANITY_DRAIN_STILL;
+  if (isSprinting && isMoving) drain += SANITY_DRAIN_SPRINT;
+
+  const pp = controls.getObject().position;
+  entityNearby = false;
+  for (const e of entities) {
+    if (!e.active) continue;
+    const dist = pp.distanceTo(e.sprite.position);
+    if (dist < 18) {
+      entityNearby = true;
+      drain += lcfg.drainEntity * (1 - clamp(dist / 18, 0, 1));
+    }
+  }
+  if (inBlackout) drain += SANITY_DRAIN_DARK;
+  sanity = clamp(sanity - drain * delta + SANITY_RECOVER * delta, 0, 100);
+}
+
+function applySanityFX() {
+  const fear = 1 - sanity / 100;
+  vignette.style.opacity = String(clamp(0.2 + fear * 0.75, 0, 1));
+  const ca = clamp((fear - 0.4) * 2, 0, 1);
+  chromaticA.style.opacity = String(ca * 0.9);
+  chromaticB.style.opacity = String(ca * 0.9);
+  const shift = fear * 6;
+  chromaticA.style.transform = `translateX(${-shift}px)`;
+  chromaticB.style.transform = `translateX(${shift}px)`;
+  noiseOverlay.style.opacity = String(clamp(fear * 0.18, 0, 0.18));
+  const sat = 1 - fear * 0.55, bri = 1 - fear * 0.18;
+  renderer.domElement.style.filter = `saturate(${sat.toFixed(2)}) brightness(${bri.toFixed(2)})`;
+  if (fear > 0.7 && Math.random() < 0.02) {
+    controls.getObject().rotation.z += (Math.random() - 0.5) * 0.015 * fear;
+  }
+  if (breathingSound.buffer) {
+    const vol = clamp(fear * 0.7, 0, 0.7);
+    breathingSound.setVolume(vol);
+    if (vol > 0.05 && !breathingSound.isPlaying) breathingSound.play();
+    if (vol <= 0.05 && breathingSound.isPlaying)  breathingSound.stop();
+  }
+}
+
+function resetSanityFX() {
+  vignette.style.opacity = '0';
+  chromaticA.style.opacity = chromaticB.style.opacity = '0';
+  noiseOverlay.style.opacity = '0';
+  if (renderer) renderer.domElement.style.filter = '';
+}
+
+// ─── Entity behaviors ─────────────────────────────────────────────────────────
+
+function isLookingAt(pos) {
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
+  const toE = pos.clone().sub(camera.position).normalize();
+  return camDir.dot(toE) > 0.55;
+}
+
+function isOutOfBounds(pos) {
+  if (!currentRooms?.length) return true;
+  const n = currentRooms[0].scene.position.z;
+  const s = currentRooms[6].scene.position.z;
+  const e = currentRooms[2].scene.position.x;
+  const w = currentRooms[0].scene.position.x;
+  return pos.z < n - 25.3 || pos.z > s || pos.x > e + 25.3 || pos.x < w;
+}
+
+function deactivateEntity(ent) {
+  ent.active = false;
+  ent.sprite.visible = false;
+  ent.sprite.position.copy(limbo);
+  ent.wasWatched = false;
+  spawnCooldowns[ent.def.id] = ent.def.spawnCooldown;
+}
+
+function spawnEntityAt(ent, roomIdx) {
+  const pos = currentRooms[roomIdx].scene.getObjectByName('Spawn')
+    .localToWorld(new THREE.Vector3());
+  pos.y = ent.def.centerY;
+  ent.sprite.position.copy(pos);
+  ent.sprite.visible = true;
+  ent.active = true;
+  ent.wasWatched = false;
+  ent.wanderTimer = 0;
+}
+
+function activeCount() { return entities.filter(e => e.active).length; }
+
+function trySpawnEntities() {
+  if (activeCount() >= LEVEL_CONFIGS[currentLevel].maxEntities) return;
+  for (const ent of entities) {
+    if (ent.active) continue;
+    if ((spawnCooldowns[ent.def.id] ?? 0) > 0) continue;
+    if (Math.random() > 0.35) continue;
+    if (activeCount() >= LEVEL_CONFIGS[currentLevel].maxEntities) break;
+
+    let idx = Math.floor(Math.random() * 8);
+    if (idx >= 4) idx++;
+    spawnEntityAt(ent, idx);
+  }
+}
+
+// El Vigilante — freezes when watched, teleports closer when you look away
+function updateVigilante(ent, delta) {
+  const looking = isLookingAt(ent.sprite.position);
+  const dist    = camera.position.distanceTo(ent.sprite.position);
+
+  if (looking) {
+    // Flicker while being watched
+    ent.sprite.material.opacity = 0.7 + Math.sin(performance.now() * 0.015) * 0.3;
+    if (!glitchSound.isPlaying) glitchSound.play();
+    ent.wasWatched = true;
+  } else {
+    ent.sprite.material.opacity = 1;
+    if (glitchSound.isPlaying) glitchSound.stop();
+
+    if (ent.wasWatched && dist > 3) {
+      // Just looked away — teleport closer
+      const dir  = camera.position.clone().sub(ent.sprite.position).normalize();
+      const jump = Math.min(dist * 0.45, 7);
+      ent.sprite.position.addScaledVector(dir, jump);
+      ent.sprite.position.y = ent.def.centerY;
+    }
+    ent.wasWatched = false;
+  }
+}
+
+// El Devorador — actively hunts, speed scales with fear
+function hasLineOfSight(from, to) {
+  const dir = to.clone().sub(from);
+  const dist = dir.length();
+  if (dist < 0.1) return true;
+  losRaycaster.set(from, dir.normalize());
+  losRaycaster.far = dist - 0.3;
+  const hits = losRaycaster.intersectObjects(allRoomGeometry, true);
+  return hits.length === 0;
+}
+
+function updateDevorador(ent, delta) {
+  const pp   = controls.getObject().position;
+  const dist = pp.distanceTo(ent.sprite.position);
+  const fear = 1 - sanity / 100;
+  const ecfg  = LEVEL_CONFIGS[currentLevel];
+  const speed = ecfg.speedBase + fear * ecfg.speedFear;
+
+  // Line-of-sight check — can it actually see the player?
+  const canSee = hasLineOfSight(ent.sprite.position, pp);
+
+  if (canSee) {
+    // Full chase — move directly toward player
+    ent.lastKnownPos = pp.clone();
+    ent.lostSightTimer = 0;
+    const dir = pp.clone().sub(ent.sprite.position);
+    dir.y = 0; dir.normalize();
+    ent.sprite.position.addScaledVector(dir, speed * delta);
+    if (!glitchSound.isPlaying) glitchSound.play();
+  } else {
+    if (glitchSound.isPlaying) glitchSound.stop();
+    ent.lostSightTimer = (ent.lostSightTimer ?? 0) + delta;
+
+    if (ent.lastKnownPos && ent.lostSightTimer < 4) {
+      // Move toward last known position at half speed
+      const dir = ent.lastKnownPos.clone().sub(ent.sprite.position);
+      dir.y = 0;
+      if (dir.length() > 0.5) {
+        dir.normalize();
+        ent.sprite.position.addScaledVector(dir, speed * 0.5 * delta);
+      }
+    }
+    // After 4s without sight: give up and wander
+  }
+
+  ent.sprite.position.y = ent.def.centerY;
+
+  // Still show glitch when very close regardless of LOS
+  if (dist < 3 && !glitchSound.isPlaying) glitchSound.play();
+}
+
+// El Perdido — wanders randomly, attacks on touch
+function updatePerdido(ent, delta) {
+  ent.wanderTimer -= delta;
+  if (ent.wanderTimer <= 0) {
+    // Pick new wander direction
+    const angle = Math.random() * Math.PI * 2;
+    const radius = rand(3, 10);
+    ent.wanderTarget.set(
+      ent.sprite.position.x + Math.cos(angle) * radius,
+      ent.def.centerY,
+      ent.sprite.position.z + Math.sin(angle) * radius
+    );
+    ent.wanderTimer = rand(3, 8);
+  }
+  const toTarget = ent.wanderTarget.clone().sub(ent.sprite.position);
+  toTarget.y = 0;
+  if (toTarget.length() > 0.5) {
+    toTarget.normalize();
+    ent.sprite.position.addScaledVector(toTarget, 1.2 * delta);
+  }
+}
+
+function updateEntities(delta) {
+  // Tick spawn cooldowns
+  for (const id in spawnCooldowns) spawnCooldowns[id] = Math.max(0, spawnCooldowns[id] - delta);
+
+  for (const ent of entities) {
+    if (!ent.active) continue;
+
+    // Remove if walked out of loaded area
+    if (isOutOfBounds(ent.sprite.position)) {
+      deactivateEntity(ent);
+      continue;
+    }
+
+    switch (ent.def.id) {
+      case 'vigilante': updateVigilante(ent, delta); break;
+      case 'devorador': updateDevorador(ent, delta); break;
+      case 'perdido':   updatePerdido(ent, delta);   break;
+    }
+  }
+}
+
+function checkEntityKills() {
+  const pp = controls.getObject().position;
+  for (const ent of entities) {
+    if (!ent.active) continue;
+    const dist = pp.distanceTo(ent.sprite.position);
+    if (dist <= ent.def.killDist) {
+      deathMessage = ent.def.deathMsg;
+      return true;
+    }
+  }
+  return false;
+}
+
+// ─── Rooms ────────────────────────────────────────────────────────────────────
+
+function updateRooms(dir) {
+  let oldZ, oldX, newZ, newX, goners;
+  switch (dir) {
+    case 'North':
+      oldZ = currentRooms[6].scene.position.z; oldX = currentRooms[6].scene.position.x;
+      goners = currentRooms.splice(6, 3);
+      goners.forEach(r => { unusedRooms.push(r); r.scene.visible=false; r.scene.position.copy(limbo); });
+      newZ = oldZ - 25.6 * 3;
+      for (let i = 2; i >= 0; i--) {
+        const ri = Math.floor(Math.random() * unusedRooms.length);
+        unusedRooms[ri].scene.position.set(oldX + i*25.6, 0, newZ);
+        unusedRooms[ri].scene.visible = true;
+        currentRooms.unshift(unusedRooms.splice(ri,1)[0]);
+      }
+      break;
+    case 'South':
+      oldZ = currentRooms[0].scene.position.z; oldX = currentRooms[0].scene.position.x;
+      goners = currentRooms.splice(0, 3);
+      goners.forEach(r => { unusedRooms.push(r); r.scene.visible=false; r.scene.position.copy(limbo); });
+      newZ = oldZ + 25.6 * 3;
+      for (let i = 0; i < 3; i++) {
+        const ri = Math.floor(Math.random() * unusedRooms.length);
+        unusedRooms[ri].scene.position.set(oldX + i*25.6, 0, newZ);
+        unusedRooms[ri].scene.visible = true;
+        currentRooms.push(unusedRooms.splice(ri,1)[0]);
+      }
+      break;
+    case 'East':
+      oldZ = currentRooms[0].scene.position.z; oldX = currentRooms[0].scene.position.x;
+      [6,3,0].forEach(idx => {
+        unusedRooms.push(currentRooms.splice(idx,1)[0]);
+        unusedRooms[unusedRooms.length-1].scene.visible=false;
+        unusedRooms[unusedRooms.length-1].scene.position.copy(limbo);
+      });
+      newX = oldX + 25.6 * 3;
+      [0,1,2].forEach(i => {
+        const ri = Math.floor(Math.random() * unusedRooms.length);
+        unusedRooms[ri].scene.position.set(newX, 0, oldZ + i*25.6);
+        unusedRooms[ri].scene.visible = true;
+        currentRooms.splice([2,5,8][i], 0, unusedRooms.splice(ri,1)[0]);
+      });
+      break;
+    case 'West':
+      oldZ = currentRooms[2].scene.position.z; oldX = currentRooms[2].scene.position.x;
+      [8,5,2].forEach(idx => {
+        unusedRooms.push(currentRooms.splice(idx,1)[0]);
+        unusedRooms[unusedRooms.length-1].scene.visible=false;
+        unusedRooms[unusedRooms.length-1].scene.position.copy(limbo);
+      });
+      newX = oldX - 25.6 * 3;
+      [0,1,2].forEach(i => {
+        const ri = Math.floor(Math.random() * unusedRooms.length);
+        unusedRooms[ri].scene.position.set(newX, 0, oldZ + i*25.6);
+        unusedRooms[ri].scene.visible = true;
+        currentRooms.splice([0,3,6][i], 0, unusedRooms.splice(ri,1)[0]);
+      });
+      break;
+  }
+  // Only center room — adjacent room walls block doorways if we include them
+  playerCollisions  = [currentRooms[4].scene];
+  allRoomGeometry   = currentRooms.map(r => r.scene);
+}
+
+function updateRoomBounds(dir) {
+  switch (dir) {
+    case 'North': currentRoomBounds[0]-=25.6; currentRoomBounds[2]-=25.6; break;
+    case 'South': currentRoomBounds[0]+=25.6; currentRoomBounds[2]+=25.6; break;
+    case 'East':  currentRoomBounds[1]+=25.6; currentRoomBounds[3]+=25.6; break;
+    case 'West':  currentRoomBounds[1]-=25.6; currentRoomBounds[3]-=25.6; break;
+  }
 }
 
 function checkRoomChange(controls) {
-	let playerPosition = controls.getObject().position;
-	//Check North
-	if (playerPosition.z < currentRoomBounds[0]) {
-		updateRoomBounds("North");
-		updateRooms("North");
-		checkAndUpdatePizzaMonster();
-		updatePizzaIntersections();
-	}
-	//Check East
-	if (playerPosition.x > currentRoomBounds[1]) {
-		updateRoomBounds("East");
-		updateRooms("East");
-		checkAndUpdatePizzaMonster();
-		updatePizzaIntersections();
-	}
-	//Check South
-	if (playerPosition.z > currentRoomBounds[2]) {
-		updateRoomBounds("South");
-		updateRooms("South");
-		checkAndUpdatePizzaMonster();
-		updatePizzaIntersections();
-	}
-	//Check West
-	if (playerPosition.x < currentRoomBounds[3]) {
-		updateRoomBounds("West");
-		updateRooms("West");
-		checkAndUpdatePizzaMonster();
-		updatePizzaIntersections();
-	}
- }
+  const p = controls.getObject().position;
+  if (p.z < currentRoomBounds[0]) { updateRoomBounds('North'); updateRooms('North'); trySpawnEntities(); trySpawnPage(); }
+  if (p.x > currentRoomBounds[1]) { updateRoomBounds('East');  updateRooms('East');  trySpawnEntities(); trySpawnPage(); }
+  if (p.z > currentRoomBounds[2]) { updateRoomBounds('South'); updateRooms('South'); trySpawnEntities(); trySpawnPage(); }
+  if (p.x < currentRoomBounds[3]) { updateRoomBounds('West');  updateRooms('West');  trySpawnEntities(); trySpawnPage(); }
+}
 
- //Move Pizza Monster
- function movePizzaMonster(delta) {
-	let spotted = false;
-	if (!monsterIsLimbo) {
-		let position = pizzaMonster.scene.position;
-		let pizzaSpeed = 7;
-		pizzaMonster.scene.getWorldDirection(pizzaDir);
-		for (let i = 0; i < 32; i++) {
-			pizzaDir.applyAxisAngle(new THREE.Vector3(0,1,0), Math.PI/16)
-			raycaster.set(position, pizzaDir);
+// ─── Collision ────────────────────────────────────────────────────────────────
 
-			let intersections = raycaster.intersectObjects(pizzaIntersections, true);
-			if (intersections.length > 0) {
-				if (intersections[0].object.name == "playerMesh") {
-					if (!glitchSound.isPlaying) {
-						glitchSound.play();
-						spotted = true;
-					}
-					pizzaMonster.scene.lookAt(controls.getObject().position);
-					pizzaMonster.scene.translateZ(pizzaSpeed*delta);
-				}
-			}
-		}
-	}
-	if (!spotted && glitchSound.isPlaying) {
-		glitchSound.stop();
-	}
- }
+function collisionDetection() {
+  const pos = controls.getObject().position;
 
- function updatePlayerMesh() {
-	playerMesh.position.copy(controls.getObject().position);
- }
+  // Lock Y — player must always stand at eye height
+  pos.y = 1.65;
 
- function updatePlayerCollisions() {
-	playerCollisions = [currentRooms[4].scene];
- }
+  for (const ray of rays) {
+    raycaster.set(pos, ray);
+    // Check ALL visible rooms, not just center — prevents clipping through adjacent walls
+    const hits = raycaster.intersectObjects(playerCollisions, true);
+    for (const hit of hits) {
+      if (hit.distance <= 0.5) {
+        // Push back proportionally so the player never reaches the wall surface
+        const push = (0.5 - hit.distance) + 0.05;
+        pos.x -= ray.x * push;
+        pos.z -= ray.z * push;
+      }
+    }
+  }
 
- //Collision Detection
- function collisionDetection(controls) {
-    function bounceBack(position, ray) {
-        position.x -= ray.bounceDistance.x;
-        position.y -= ray.bounceDistance.y;
-        position.z -= ray.bounceDistance.z;
+  // Safety net: if the player escapes the loaded grid entirely, snap back to center
+  const cx = currentRooms[4].scene.position.x;
+  const cz = currentRooms[4].scene.position.z;
+  if (Math.abs(pos.x - cx) > 38 || Math.abs(pos.z - cz) > 38) {
+    pos.set(cx, 1.65, cz);
+    velocity.x = velocity.z = 0;
+  }
+}
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+
+function onKeyDown(e) {
+  const moving = () => walkingSound.buffer && !walkingSound.isPlaying && walkingSound.play();
+  switch (e.code) {
+    case 'ArrowUp':    case 'KeyW': moving(); moveForward  = true; break;
+    case 'ArrowLeft':  case 'KeyA': moving(); moveLeft     = true; break;
+    case 'ArrowDown':  case 'KeyS': moving(); moveBackward = true; break;
+    case 'ArrowRight': case 'KeyD': moving(); moveRight    = true; break;
+    case 'ShiftLeft':  case 'ShiftRight': isSprinting = true; break;
+  }
+}
+function onKeyUp(e) {
+  const anyMove = () => moveForward || moveBackward || moveLeft || moveRight;
+  switch (e.code) {
+    case 'ArrowUp':    case 'KeyW': moveForward  = false; if (!anyMove()) walkingSound.stop?.(); break;
+    case 'ArrowLeft':  case 'KeyA': moveLeft     = false; if (!anyMove()) walkingSound.stop?.(); break;
+    case 'ArrowDown':  case 'KeyS': moveBackward = false; if (!anyMove()) walkingSound.stop?.(); break;
+    case 'ArrowRight': case 'KeyD': moveRight    = false; if (!anyMove()) walkingSound.stop?.(); break;
+    case 'ShiftLeft':  case 'ShiftRight': isSprinting = false; break;
+  }
+}
+
+// ─── Win / Lose ───────────────────────────────────────────────────────────────
+
+async function triggerDeath() {
+  playerMovement = false;
+  gameLost = true;
+  glitchSound.stop();
+  if (breathingSound.isPlaying) breathingSound.stop();
+  deathSound.play();
+
+  vignette.style.transition = 'none';
+  vignette.style.opacity = '1';
+  vignette.style.background = 'rgba(60,0,0,0.85)';
+
+  colorScreen.style.display = 'block';
+  colorScreen.classList.add('deathScreen');
+  endMessage.style.display = 'flex';
+  endMessage.style.color = '#cc2222';
+  endMessage.textContent = deathMessage || 'Te encontraron.';
+
+  await sleep(3500);
+  showEndMenu();
+}
+
+async function triggerWin() {
+  playerMovement = false;
+  gameWon = true;
+  if (breathingSound.isPlaying) breathingSound.stop();
+  winSound.play();
+
+  if (currentLevel < MAX_LEVEL) {
+    // Level transition — advance to next level
+    colorScreen.style.display = 'block'; colorScreen.classList.add('winScreen');
+    endMessage.style.display = 'flex';
+    endMessage.style.color = '#d4b060';
+    endMessage.textContent = `Escapaste del ${LEVEL_CONFIGS[currentLevel].name}`;
+    await sleep(3000);
+
+    endMessage.style.color = '#ffffff';
+    endMessage.textContent = `Entrando al ${LEVEL_CONFIGS[currentLevel + 1].name}...`;
+    await sleep(2500);
+
+    currentLevel++;
+    endMessage.style.display = 'none';
+    colorScreen.style.display = 'none';
+    colorScreen.className = '';
+    await init();
+  } else {
+    // Final victory
+    vignette.style.transition = 'opacity 4s'; vignette.style.opacity = '0';
+    colorScreen.style.display = 'block'; colorScreen.classList.add('winScreen');
+    endMessage.style.display = 'flex';
+    endMessage.style.color = '#d4b060';
+    endMessage.textContent = 'Escapaste. Todos los niveles superados.';
+    await sleep(5000);
+    showEndMenu();
+  }
+}
+
+function showEndMenu() {
+  const elapsed = (performance.now() - startTime) / 1000;
+  timeEl.textContent = `${Math.floor(elapsed/60)}m ${(elapsed%60).toFixed(1)}s`;
+  menuEl.style.display = 'flex';
+  controls.unlock();
+}
+
+// ─── Animation loop ───────────────────────────────────────────────────────────
+
+function animate() {
+  animFrameId = requestAnimationFrame(animate);
+  const now   = performance.now();
+  const delta = Math.min((now - prevTime) / 1000, 0.1);
+  prevTime = now;
+
+  if (controls.isLocked && playerMovement) {
+    velocity.x -= velocity.x * 100 * delta;
+    velocity.z -= velocity.z * 100 * delta;
+    velocity.y  = 0;
+    direction.z = Number(moveForward)  - Number(moveBackward);
+    direction.x = Number(moveRight)    - Number(moveLeft);
+    direction.normalize();
+    const spd = 400 * (isSprinting ? SPRINT_MULTIPLIER : 1);
+    if (moveForward  || moveBackward) velocity.z -= direction.z * spd * delta;
+    if (moveLeft     || moveRight)    velocity.x -= direction.x * spd * delta;
+    controls.moveRight(-velocity.x * delta);
+    controls.moveForward(-velocity.z * delta);
+  }
+
+  if (!gameLost && !gameWon) {
+    collisionDetection();
+    checkRoomChange(controls);
+    playerMesh.position.copy(controls.getObject().position);
+    updateRoomLights(delta, now / 1000);
+    updateSanity(delta);
+    applySanityFX();
+    updateEntities(delta);
+    updatePages();
+    updatePageCompass();
+
+    // Pulse exit
+    if (exitMesh) {
+      exitMesh.material.emissiveIntensity = 0.4 + Math.sin(now / 400) * 0.3;
     }
 
-    let position = controls.getObject().position;
-    for (let i = 0; i < rays.length; i++) {
-
-        // Set bounce distance for each vector
-        let bounceSize = 0.1;
-        rays[i].bounceDistance = {
-            x: rays[i].x * bounceSize,
-            y: rays[i].y * bounceSize,
-            z: rays[i].z * bounceSize
-        };
-
-        raycaster.set(position, rays[i]);
-
-        let intersections = raycaster.intersectObjects(playerCollisions, true);
-
-		for (let j = 0; j < intersections.length; j++) {
-			if (intersections[j].distance <= .1) {
-            	bounceBack(position, rays[i]);
-			}
-		}
+    if (checkEntityKills()) {
+      triggerDeath();
+    } else if (exitMesh && controls.getObject().position.distanceTo(exitMesh.position) < 1.2) {
+      triggerWin();
     }
+  }
 
-    return false;
-};
-
-function checkLoseGame() {
-	if (!monsterIsLimbo) {
-
-		let position = pizzaMonster.scene.position;
-		pizzaMonster.scene.getWorldDirection(pizzaDir);
-
-		raycaster.set(position, pizzaDir);
-
-		let intersections = raycaster.intersectObjects(pizzaIntersections, true);
-
-		if (intersections.length > 0) {
-			if (intersections[0].object.name == "playerMesh" && intersections[0].distance <= 0.7) {
-				return true;
-			}
-		}
-	}
-	return false;
+  renderer.render(scene, camera);
 }
 
-function checkWinGame() {
-	if (!saviorIsLimbo) {
-		let saviorVector = new THREE.Vector2(saviorPizza.scene.position.x, saviorPizza.scene.position.z);
-		let playerVector = new THREE.Vector2(controls.getObject().position.x, controls.getObject().position.z);
-		let distanceToSavior = saviorVector.distanceTo(playerVector);
-		
-		if (distanceToSavior <= 0.7) {
-			return true;
-		}
-	}
-	return false;
-}
+// ─── Restart ──────────────────────────────────────────────────────────────────
 
-//Animation Loop
-async function animate() {
-	const time = performance.now()
-	const delta = (time - prevTime) / 1000;
-	if (controls.isLocked === true && playerMovement === true) {
-		velocity.x -= velocity.x * 100 * delta
-        velocity.z -= velocity.z * 100 * delta
-		velocity.y = 0;
-		direction.z = Number(moveForward) - Number(moveBackward);
-		direction.x = Number(moveRight) - Number(moveLeft);
-		direction.normalize(); // this ensures consistent movements in all directions
-		if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
-		if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
-		controls.moveRight(-velocity.x * delta)
-		controls.moveForward(-velocity.z * delta)
-	}
-	prevTime = time;
+document.getElementById('restart').addEventListener('click', async () => {
+  menuEl.style.display = 'none';
+  startTime = undefined;
+  currentLevel = 0;
+  await init();
+});
 
-	collisionDetection(controls);
-	checkRoomChange(controls);
-	updatePlayerMesh();
+window.addEventListener('resize', () => {
+  if (!camera || !renderer) return;
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 
-	if (checkLoseGame()) {
-		controls.getObject().lookAt(pizzaMonster.scene.position);
-		playerMovement = false;
-		gameLost = true;
-	} else {
-		movePizzaMonster(delta);
-	}
+// ─── Boot ─────────────────────────────────────────────────────────────────────
 
-	if (checkWinGame()) {
-		playerMovement = false;
-		gameWon = true;
-	}
-
-	if (gameLost) {
-		endTime = new Date();
-		elapsedTime = (endTime - startTime)/1000;
-		let min = Math.floor(elapsedTime/60);
-		let sec = (elapsedTime % 60).toFixed(3);
-		let timeString = `Min: ${min} - Sec: ${sec}`;
-		glitchSound.stop();
-		deathSound.play();
-		document.getElementById("colorScreen").style.display = "block"; 
-		document.getElementById("colorScreen").classList.add("deathScreen");
-		await new Promise(r => setTimeout(r, 2000));
-		document.getElementById("time").innerHTML = timeString;
-		document.getElementById("menu").style.display = "flex";
-		controls.unlock();
-	} else if (gameWon) {
-		endTime = new Date();
-		elapsedTime = (endTime - startTime)/1000;
-		let min = Math.floor(elapsedTime/60);
-		let sec = (elapsedTime % 60).toFixed(3);
-		let timeString = `Min: ${min} - Sec: ${sec}`;
-		winSound.play();
-		document.getElementById("colorScreen").style.display = "block";
-		document.getElementById("colorScreen").classList.add("winScreen");
-		await new Promise(r => setTimeout(r, 2000));
-		document.getElementById("time").innerHTML = timeString;
-		document.getElementById("menu").style.display = "flex";
-		controls.unlock();
-	} else {
-		requestAnimationFrame( animate );
-	}
-	renderer.render( scene, camera );
-}
-
-
-//Window Resizing
-window.addEventListener('resize', onWindowResize, false)
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight
-    camera.updateProjectionMatrix()
-    renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.render(scene, camera);
-}
+await init();

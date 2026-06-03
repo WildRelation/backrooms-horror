@@ -1,63 +1,312 @@
+* { box-sizing: border-box; }
+
 body {
   height: 100%;
   width: 100%;
-  align-items: center;
-  display: flex;
-  justify-content: center;
   margin: 0;
   overflow: hidden;
-  background-color: white;
+  background-color: #1a1500;
 }
 
-.coverArt {
-  position: relative;
-  left: 50vw;
+/* ── Intro screen ── */
+#introScreen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 1.2s ease;
+}
+#introScreen.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+#introText {
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  color: #c8b87a;
+  max-width: 480px;
+}
+.lore {
+  font-size: 1.1rem;
+  margin: 0.4em 0;
+  letter-spacing: 0.05em;
+}
+.lore.small {
+  font-size: 0.75rem;
+  color: #7a6e50;
+  margin: 0.15em 0;
+}
+/* ── Controls block ── */
+#controls {
+  margin-top: 2em;
+  border-top: 1px solid #3a3320;
+  padding-top: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+.ctrl-row {
+  display: flex;
+  justify-content: center;
+  gap: 1.2em;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+}
+.key {
+  color: #c8b87a;
+  font-weight: bold;
+  min-width: 80px;
+  text-align: right;
+}
+.ctrl-desc {
+  color: #7a6e50;
+  min-width: 160px;
+  text-align: left;
+}
+.ctrl-objective {
+  margin-top: 0.8em;
+  font-size: 0.72rem;
+  color: #7a6e50;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+.ctrl-entities {
+  margin-top: 1em;
+  border-top: 1px solid #2a2210;
+  padding-top: 0.9em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+}
+.entity-hint {
+  font-size: 0.7rem;
+  color: #5a5040;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+.entity-name {
+  color: #9a8a5a;
+  font-weight: bold;
 }
 
+#clickPrompt {
+  margin-top: 2.5em;
+  font-size: 0.85rem;
+  color: #c8b87a;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  animation: blink 1.6s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ── Vignette ── */
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    transparent 40%,
+    rgba(0,0,0,0.55) 100%);
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+/* ── Chromatic aberration overlays ── */
+#chromaticA, #chromaticB {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  opacity: 0;
+}
+#chromaticA {
+  background: rgba(255, 0, 0, 0.06);
+  mix-blend-mode: screen;
+  transform: translateX(-2px);
+}
+#chromaticB {
+  background: rgba(0, 200, 255, 0.06);
+  mix-blend-mode: screen;
+  transform: translateX(2px);
+}
+
+/* ── Noise / grain overlay ── */
+#noiseOverlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  opacity: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+}
+
+/* ── End-state color screen ── */
 #colorScreen {
   width: 100vw;
   height: 100vh;
-  position: absolute;
+  position: fixed;
   display: none;
+  z-index: 20;
 }
 
+/* ── End message ── */
+#endMessage {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+  font-family: 'Courier New', monospace;
+  font-size: 1.4rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255,255,255,0.6);
+}
+
+/* ── Restart menu ── */
 #menu {
   align-items: center;
-  border: 2px solid black;
-  background-color: #FFDB58;
-  width: 20%;
-  height: 15%;
-  position: absolute;
+  background-color: #111008;
+  border: 1px solid #3a3320;
+  width: 280px;
+  padding: 2em 1.5em;
+  position: fixed;
   left: 50%;
   top: 50%;
-  -webkit-transform: translate(-50%, -50%);
   transform: translate(-50%, -50%);
   display: none;
   flex-direction: column;
-  justify-content: space-around;
-  z-index: 2;
+  gap: 1.2em;
+  z-index: 30;
+  font-family: 'Courier New', monospace;
+}
+#time {
+  color: #7a6e50;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+}
+.menuButton {
+  background: transparent;
+  border: 1px solid #c8b87a;
+  color: #c8b87a;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  letter-spacing: 0.15em;
+  padding: 0.5em 1.8em;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.2s, color 0.2s;
+}
+.menuButton:hover {
+  background: #c8b87a;
+  color: #111008;
 }
 
-@keyframes deathScreen {
-  from {background-color: transparent;}
-  to {background-color: rgba(255, 0, 0, 0.6);}
+/* ── Page counter ── */
+#pageCounter {
+  position: fixed;
+  top: 1.2em;
+  right: 1.5em;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.3em;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.5s;
+  text-shadow: 0 0 8px rgba(255,255,255,0.5);
+}
+#pageCounter .dot { color: rgba(255,255,255,0.25); }
+#pageCounter .dot.filled { color: #ffffff; text-shadow: 0 0 6px #fff; }
+
+/* ── Page compass ── */
+#pageCompass {
+  position: fixed;
+  bottom: 2.2em;
+  right: 2em;
+  width: 40px;
+  height: 40px;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.5s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#pageCompass.show { opacity: 1; }
+#pageCompassArrow {
+  font-size: 1.3rem;
+  color: rgba(255,255,255,0.55);
+  text-shadow: 0 0 8px rgba(255,255,255,0.4);
+  transform-origin: center;
+  transition: transform 0.15s ease;
+  user-select: none;
 }
 
-@keyframes winScreen {
-  from {background-color: transparent;}
-  to {background-color: rgba(255, 255, 255, 1);}
+/* ── Crosshair ── */
+#crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(200, 184, 122, 0.5);
+  pointer-events: none;
+  z-index: 15;
+  transition: opacity 0.8s;
 }
+#crosshair.hidden { opacity: 0; }
 
+/* ── Timer hint ── */
+#timerHint {
+  position: fixed;
+  bottom: 2em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  color: rgba(200, 184, 122, 0.3);
+  letter-spacing: 0.2em;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 2s;
+}
+#timerHint.show { opacity: 1; }
+
+/* ── Death / win animations ── */
+@keyframes deathFade {
+  from { background-color: transparent; }
+  to   { background-color: rgba(40, 0, 0, 0.92); }
+}
+@keyframes winFade {
+  from { background-color: transparent; }
+  to   { background-color: rgba(200, 184, 122, 0.85); }
+}
 .deathScreen {
-  animation-name: deathScreen;
-  animation-duration: 4s;
-  animation-fill-mode: forwards;
-  z-index: 1;
+  animation: deathFade 3s ease-in forwards;
+}
+.winScreen {
+  animation: winFade 5s ease-in forwards;
 }
 
-.winScreen {
-  animation-name: winScreen;
-  animation-duration: 6s;
-  animation-fill-mode: forwards;
-  z-index: 1;
+/* ── Canvas fills window ── */
+canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
 }
