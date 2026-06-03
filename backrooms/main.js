@@ -110,6 +110,10 @@ let playerMesh, playerCollisions, allRoomGeometry;
 let rays;
 let losRaycaster; // separate raycaster for line-of-sight checks
 
+// Pre-flattened mesh lists — rebuilt when rooms change, reused every frame
+let cachedCollisionMeshes = [];
+let cachedLOSMeshes = [];
+
 let currentRooms, unusedRooms, currentRoomBounds;
 let roomPositions, limbo;
 let room1, room2, room3, room4, room5, room6,
@@ -144,8 +148,12 @@ let exitSpawned    = false;
 
 // Audio
 let walkingSound, buzzingSound, glitchSound, deathSound, winSound;
+let audioListener = null;
 let audioLoader;
 let animFrameId = null;
+
+// Volume — persisted across sessions
+let volumeLevel = parseFloat(localStorage.getItem('volumeLevel') ?? '0.7');
 let frameCount  = 0;
 
 // Game state
@@ -373,7 +381,9 @@ function showHint(text, ms) {
 // ─── Audio ────────────────────────────────────────────────────────────────────
 
 function initAudio() {
-  const listener = new THREE.AudioListener();
+  audioListener = new THREE.AudioListener();
+  audioListener.setMasterVolume(volumeLevel);
+  const listener = audioListener;
   camera.add(listener);
   audioLoader = new THREE.AudioLoader();
 
@@ -536,6 +546,22 @@ async function loadReserveRooms() {
   }
 }
 
+// ─── Mesh cache ───────────────────────────────────────────────────────────────
+
+// Pre-flatten scene graphs into plain Mesh arrays so raycasters don't have to
+// traverse the scene hierarchy on every call (avoids O(n_nodes) traversal × N rays/frame).
+function rebuildMeshCaches() {
+  cachedCollisionMeshes = [];
+  playerCollisions.forEach(s => s.traverse(o => { if (o.isMesh) cachedCollisionMeshes.push(o); }));
+
+  // LOS only needs the 5 rooms the player/entities actually occupy — center + 4 cardinals.
+  // Checking all 9 rooms was the single biggest CPU bottleneck.
+  cachedLOSMeshes = [];
+  [1, 3, 4, 5, 7].forEach(i => {
+    currentRooms[i]?.scene.traverse(o => { if (o.isMesh) cachedLOSMeshes.push(o); });
+  });
+}
+
 // ─── Scene setup ─────────────────────────────────────────────────────────────
 
 function setupScene() {
@@ -547,6 +573,7 @@ function setupScene() {
   // Only center room — adjacent room walls block doorways if we include them
   playerCollisions  = [currentRooms[4].scene];
   allRoomGeometry   = currentRooms.map(r => r.scene);
+  rebuildMeshCaches();
 
   const spawnWorld = currentRooms[1].scene.getObjectByName('Spawn')
     .localToWorld(new THREE.Vector3());
@@ -878,7 +905,7 @@ function hasLineOfSight(from, to) {
   if (dist < 0.1) return true;
   losRaycaster.set(from, dir.normalize());
   losRaycaster.far = dist - 0.3;
-  const hits = losRaycaster.intersectObjects(allRoomGeometry, true);
+  const hits = losRaycaster.intersectObjects(cachedLOSMeshes, false);
   return hits.length === 0;
 }
 
@@ -890,7 +917,7 @@ function updateDevorador(ent, delta) {
   const speed = ecfg.speedBase + fear * ecfg.speedFear;
 
   // LOS is expensive — cache result for 3 frames
-  if (ent._losFrame === undefined || frameCount - ent._losFrame >= 3) {
+  if (ent._losFrame === undefined || frameCount - ent._losFrame >= 8) {
     ent._losCache = hasLineOfSight(ent.sprite.position, pp);
     ent._losFrame = frameCount;
   }
@@ -1045,6 +1072,7 @@ function updateRooms(dir) {
   // Only center room — adjacent room walls block doorways if we include them
   playerCollisions  = [currentRooms[4].scene];
   allRoomGeometry   = currentRooms.map(r => r.scene);
+  rebuildMeshCaches();
 }
 
 function updateRoomBounds(dir) {
@@ -1075,7 +1103,7 @@ function collisionDetection() {
   for (const ray of rays) {
     raycaster.set(pos, ray);
     // Check ALL visible rooms, not just center — prevents clipping through adjacent walls
-    const hits = raycaster.intersectObjects(playerCollisions, true);
+    const hits = raycaster.intersectObjects(cachedCollisionMeshes, false);
     for (const hit of hits) {
       if (hit.distance <= 0.5) {
         // Push back proportionally so the player never reaches the wall surface
@@ -1190,6 +1218,13 @@ function animate() {
   prevTime = now;
   frameCount++;
 
+  // FPS counter — updates every 30 frames
+  if (frameCount % 30 === 0) {
+    const fps = Math.round(1 / delta);
+    const fpsEl = document.getElementById('fpsCounter');
+    if (fpsEl) fpsEl.textContent = `${fps} fps · ${renderer.info.render.calls} draw calls`;
+  }
+
   if (controls.isLocked && playerMovement) {
     const decay = Math.exp(-15 * delta);
     velocity.x *= decay;
@@ -1248,6 +1283,38 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// ─── Volume sliders ───────────────────────────────────────────────────────────
+
+function applyVolume(v) {
+  volumeLevel = v;
+  localStorage.setItem('volumeLevel', v);
+  audioListener?.setMasterVolume(v);
+}
+
+function syncVolumeUI(v) {
+  const pct = `${Math.round(v * 100)}%`;
+  const s1 = document.getElementById('volumeSlider');
+  const l1 = document.getElementById('volumeLabel');
+  const s2 = document.getElementById('volumeSliderMenu');
+  const l2 = document.getElementById('volumeLabelMenu');
+  if (s1) s1.value = v;
+  if (l1) l1.textContent = pct;
+  if (s2) s2.value = v;
+  if (l2) l2.textContent = pct;
+}
+
+document.getElementById('volumeSlider')?.addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  applyVolume(v);
+  syncVolumeUI(v);
+});
+document.getElementById('volumeSliderMenu')?.addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  applyVolume(v);
+  syncVolumeUI(v);
+});
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
+syncVolumeUI(volumeLevel);
 await init();

@@ -99,6 +99,59 @@ body {
   font-weight: bold;
 }
 
+/* ── Volume slider ── */
+.volume-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2em;
+  margin-top: 1em;
+  font-size: 0.78rem;
+}
+.menu-volume {
+  width: 100%;
+  justify-content: space-between;
+  gap: 0.6em;
+}
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 130px;
+  height: 3px;
+  background: #3a3320;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #c8b87a;
+  box-shadow: 0 0 6px rgba(200,184,122,0.5);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: #c8b87a;
+  box-shadow: 0 0 6px rgba(200,184,122,0.5);
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  background: #3a3320;
+  height: 3px;
+  border-radius: 2px;
+}
+input[type="range"]::-moz-range-track {
+  background: #3a3320;
+  height: 3px;
+  border-radius: 2px;
+}
+
 #clickPrompt {
   margin-top: 2.5em;
   font-size: 0.85rem;
@@ -346,6 +399,19 @@ body {
 }
 .winScreen {
   animation: winFade 5s ease-in forwards;
+}
+
+/* ── FPS counter ── */
+#fpsCounter {
+  position: fixed;
+  top: 0.5em;
+  left: 0.8em;
+  font-family: 'Courier New', monospace;
+  font-size: 0.62rem;
+  color: rgba(200, 184, 122, 0.35);
+  pointer-events: none;
+  z-index: 15;
+  letter-spacing: 0.05em;
 }
 
 /* ── Canvas fills window ── */
