@@ -1,0 +1,7 @@
+backrooms/node_modules
+backrooms/dist
+backrooms/.vite
+assets
+.git
+.github
+README.md
