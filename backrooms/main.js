@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+
+// Monkey-patch Three.js so all Mesh raycasts use the BVH acceleration structure
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 // ─── Level configs ────────────────────────────────────────────────────────────
 
@@ -551,15 +557,22 @@ async function loadReserveRooms() {
 
 // Pre-flatten scene graphs into plain Mesh arrays so raycasters don't have to
 // traverse the scene hierarchy on every call (avoids O(n_nodes) traversal × N rays/frame).
+function ensureBVH(mesh) {
+  if (!mesh.geometry.boundsTree) mesh.geometry.computeBoundsTree();
+}
+
 function rebuildMeshCaches() {
   cachedCollisionMeshes = [];
-  playerCollisions.forEach(s => s.traverse(o => { if (o.isMesh) cachedCollisionMeshes.push(o); }));
+  playerCollisions.forEach(s => s.traverse(o => {
+    if (o.isMesh) { ensureBVH(o); cachedCollisionMeshes.push(o); }
+  }));
 
   // LOS only needs the 5 rooms the player/entities actually occupy — center + 4 cardinals.
-  // Checking all 9 rooms was the single biggest CPU bottleneck.
   cachedLOSMeshes = [];
   [1, 3, 4, 5, 7].forEach(i => {
-    currentRooms[i]?.scene.traverse(o => { if (o.isMesh) cachedLOSMeshes.push(o); });
+    currentRooms[i]?.scene.traverse(o => {
+      if (o.isMesh) { ensureBVH(o); cachedLOSMeshes.push(o); }
+    });
   });
 }
 
