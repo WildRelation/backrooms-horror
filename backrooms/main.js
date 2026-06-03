@@ -384,20 +384,20 @@ function initAudio() {
   winSound       = new THREE.Audio(listener);
 
   audioLoader.load('./sounds/walking.mp3', buf => {
-    walkingSound.setBuffer(buf); walkingSound.setLoop(true); walkingSound.setVolume(0.5);
+    walkingSound.setBuffer(buf); walkingSound.setLoop(true); walkingSound.setVolume(0.3);
   });
   audioLoader.load('./sounds/buzzing.mp3', buf => {
-    buzzingSound.setBuffer(buf); buzzingSound.setLoop(true); buzzingSound.setVolume(0.06);
+    buzzingSound.setBuffer(buf); buzzingSound.setLoop(true); buzzingSound.setVolume(0.04);
     // Play only after user gesture — browsers block audio before interaction
   });
   audioLoader.load('./sounds/glitch.mp3', buf => {
-    glitchSound.setBuffer(buf); glitchSound.setLoop(false); glitchSound.setVolume(1);
+    glitchSound.setBuffer(buf); glitchSound.setLoop(false); glitchSound.setVolume(0.6);
   });
   audioLoader.load('./sounds/death.mp3', buf => {
-    deathSound.setBuffer(buf); deathSound.setLoop(false); deathSound.setVolume(0.9);
+    deathSound.setBuffer(buf); deathSound.setLoop(false); deathSound.setVolume(0.6);
   });
   audioLoader.load('./sounds/win.mp3', buf => {
-    winSound.setBuffer(buf); winSound.setLoop(false); winSound.setVolume(1);
+    winSound.setBuffer(buf); winSound.setLoop(false); winSound.setVolume(0.6);
   });
 }
 
