@@ -5,14 +5,14 @@
     <link rel="stylesheet" href="style.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script type="module" src="main.js"></script>
-    <title>The Backrooms</title>
+    <title>The Warcrooms</title>
   </head>
   <body>
     <!-- Pre-game intro / click-to-start -->
     <div id="introScreen">
       <div id="introText">
+        <p class="lore">THE WARCROOMS</p>
         <p class="lore">You have no-clipped out of reality.</p>
-        <p class="lore">Level 0. The Lobby.</p>
         <p class="lore small">Estimated square footage: 600,000,000+</p>
         <p class="lore small">Entities present: unknown</p>
         <div id="controls">
@@ -31,6 +31,9 @@
         <div id="clickPrompt">click to enter</div>
       </div>
     </div>
+
+    <!-- Per-level color tint — makes levels visually distinct -->
+    <div id="levelTint"></div>
 
     <!-- Fullscreen overlays -->
     <div id="vignette"></div>

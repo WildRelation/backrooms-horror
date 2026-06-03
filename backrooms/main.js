@@ -7,13 +7,14 @@ import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockCont
 const LEVEL_CONFIGS = [
   {
     name:        'Nivel 0 — The Lobby',
-    fogColor:    0xc8a84a, fogNear: 10, fogFar: 42,  // very open — easy to navigate
+    fogColor:    0xc8a84a, fogNear: 10, fogFar: 42,
     bgColor:     0x1a1500,
     ambientColor:0x3d3010,
     lightColor:  0xd4b060, lightMin: 18, lightMax: 28,
+    tint:        null,                                 // no tint — base look
     pagesNeeded: 3,
     maxEntities: 1,
-    speedBase:   2.0, speedFear: 3.0,   // slow
+    speedBase:   2.0, speedFear: 3.0,
     drainIdle:   1.2, drainEntity: 14,
     cooldowns:   { vigilante: 40, devorador: 35, perdido: 50 },
     initCooldowns:{ vigilante: 20, devorador: 15, perdido: 25 },
@@ -24,6 +25,7 @@ const LEVEL_CONFIGS = [
     bgColor:     0x080e05,
     ambientColor:0x101808,
     lightColor:  0xa0c080, lightMin: 13, lightMax: 20,
+    tint:        'rgba(0, 60, 10, 0.18)',              // green industrial tint
     pagesNeeded: 4,
     maxEntities: 2,
     speedBase:   3.0, speedFear: 4.5,
@@ -37,6 +39,7 @@ const LEVEL_CONFIGS = [
     bgColor:     0x080400,
     ambientColor:0x100600,
     lightColor:  0xd06018, lightMin: 10, lightMax: 16,
+    tint:        'rgba(60, 25, 0, 0.25)',              // dark amber tint
     pagesNeeded: 5,
     maxEntities: 2,
     speedBase:   4.0, speedFear: 5.5,
@@ -46,13 +49,14 @@ const LEVEL_CONFIGS = [
   },
   {
     name:        'Nivel 3 — Electrical Station',
-    fogColor:    0x1a0000, fogNear: 2,  fogFar: 7,   // almost pitch black
+    fogColor:    0x1a0000, fogNear: 2,  fogFar: 7,
     bgColor:     0x050000,
     ambientColor:0x0a0000,
-    lightColor:  0xff2200, lightMin: 6,  lightMax: 11, // red emergency lighting
+    lightColor:  0xff2200, lightMin: 6,  lightMax: 11,
+    tint:        'rgba(80, 0, 0, 0.30)',               // red emergency tint
     pagesNeeded: 6,
-    maxEntities: 3,                                    // all 3 entities at once
-    speedBase:   5.5, speedFear: 7.0,                 // very fast
+    maxEntities: 3,
+    speedBase:   5.5, speedFear: 7.0,
     drainIdle:   4.0, drainEntity: 25,
     cooldowns:   { vigilante: 14, devorador: 10, perdido: 18 },
     initCooldowns:{ vigilante: 4,  devorador: 3,  perdido: 6  },
@@ -251,6 +255,18 @@ async function init() {
 
   // Fog – yellowish, tight
   scene.fog = new THREE.Fog(cfg.fogColor, cfg.fogNear, cfg.fogFar);
+
+  // Apply per-level color tint overlay
+  const levelTint = document.getElementById('levelTint');
+  if (levelTint) {
+    if (cfg.tint) {
+      levelTint.style.background = cfg.tint;
+      levelTint.classList.add('active');
+    } else {
+      levelTint.style.background = '';
+      levelTint.classList.remove('active');
+    }
+  }
 
   // Lighting
   scene.add(new THREE.AmbientLight(cfg.ambientColor, 0.8));

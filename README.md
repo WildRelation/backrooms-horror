@@ -1,6 +1,6 @@
-# Backrooms Horror
+# The Warcrooms
 
-First-person horror game set in the Backrooms. Built with Three.js, runs entirely in the browser — no backend required.
+First-person horror game set in the Warcrooms. Built with Three.js, runs entirely in the browser — no backend required.
 
 **[Play locally](#getting-started)**
 

@@ -34,6 +34,13 @@ body {
   margin: 0.4em 0;
   letter-spacing: 0.05em;
 }
+.lore:first-child {
+  font-size: 1.6rem;
+  letter-spacing: 0.3em;
+  color: #e8c860;
+  text-shadow: 0 0 20px rgba(200,160,40,0.5);
+  margin-bottom: 0.6em;
+}
 .lore.small {
   font-size: 0.75rem;
   color: #7a6e50;
@@ -104,6 +111,17 @@ body {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
 }
+
+/* ── Level tint overlay ── */
+#levelTint {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  opacity: 0;
+  transition: background 2s ease, opacity 2s ease;
+}
+#levelTint.active { opacity: 1; }
 
 /* ── Vignette ── */
 #vignette {
