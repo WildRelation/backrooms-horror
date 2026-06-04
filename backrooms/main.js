@@ -160,6 +160,7 @@ const SPRINT_MULTIPLIER   = 1.9;
 let currentLevel = 0;
 let entityNearby = false;
 let inBlackout   = false;
+let entityRespawnTimer = 0;  // periodic respawn check every ~20s
 
 // Pages / exit
 let pagesCollected = 0;
@@ -313,6 +314,7 @@ async function init() {
   exitMesh = null;
   sanity = 100;
   entityNearby = inBlackout = false;
+  entityRespawnTimer = 15; // slight delay before first periodic check
   entities = [];
   usedLoreIndices = new Set();
   const cfg = LEVEL_CONFIGS[currentLevel];
@@ -1141,7 +1143,7 @@ function deactivateEntity(ent) {
   ent.sprite.visible = false;
   ent.sprite.position.copy(limbo);
   ent.wasWatched = false;
-  spawnCooldowns[ent.def.id] = ent.def.spawnCooldown;
+  spawnCooldowns[ent.def.id] = LEVEL_CONFIGS[currentLevel].cooldowns[ent.def.id] ?? ent.def.spawnCooldown;
   if (ent.def.id === 'devorador' && stepsDevSound?.isPlaying) stepsDevSound.stop();
 }
 
@@ -1160,15 +1162,27 @@ function activeCount() { return entities.filter(e => e.active).length; }
 
 function trySpawnEntities() {
   if (activeCount() >= LEVEL_CONFIGS[currentLevel].maxEntities) return;
-  for (const ent of entities) {
+  const pp = controls?.object?.position;
+  // Shuffle so different entities get priority each call
+  const shuffled = [...entities].sort(() => Math.random() - 0.5);
+  for (const ent of shuffled) {
     if (ent.active) continue;
     if ((ent.def.minLevel ?? 0) > currentLevel) continue;
     if ((spawnCooldowns[ent.def.id] ?? 0) > 0) continue;
-    if (Math.random() > 0.35) continue;
     if (activeCount() >= LEVEL_CONFIGS[currentLevel].maxEntities) break;
 
-    let idx = Math.floor(Math.random() * 8);
-    if (idx >= 4) idx++;
+    // Pick a room far enough from the player — exclude rooms within ~30 units
+    const candidates = [];
+    for (let i = 0; i < currentRooms.length; i++) {
+      if (i === 4) continue; // never center room
+      if (!pp) { candidates.push(i); continue; }
+      const spawnObj = currentRooms[i].scene.getObjectByName('Spawn');
+      if (!spawnObj) continue;
+      const sp = spawnObj.localToWorld(new THREE.Vector3());
+      if (pp.distanceTo(sp) >= 30) candidates.push(i);
+    }
+    if (candidates.length === 0) continue; // player too central — skip this tick
+    const idx = candidates[Math.floor(Math.random() * candidates.length)];
     spawnEntityAt(ent, idx);
   }
 }
@@ -1705,6 +1719,12 @@ function animate() {
     applySanityFX();
     updateEntities(delta);
     updateAmbientSounds(delta);
+    // Periodic entity respawn — catches the case where player stays in one room
+    entityRespawnTimer -= delta;
+    if (entityRespawnTimer <= 0) {
+      trySpawnEntities();
+      entityRespawnTimer = 20;
+    }
     // Throttle non-critical updates — run every N frames
     if (frameCount % 2 === 0) updatePages();
     if (frameCount % 4 === 0) { updatePageCompass(); updatePageRadar(); }
