@@ -837,7 +837,22 @@ function updatePages() {
   for (let i = pageMeshes.length - 1; i >= 0; i--) {
     const page = pageMeshes[i];
     page.rotation.y += 0.018;
-    page.position.y  = 1.65 + Math.sin(now / 500 + i) * 0.12; // hover at eye level
+    page.position.y  = 1.65 + Math.sin(now / 500 + i) * 0.12;
+
+    // Flicker page light when an entity is in the same room (~25 units)
+    const pageLight = page.children.find(c => c.isLight);
+    if (pageLight) {
+      const entityNearPage = entities.some(e => e.active &&
+        e.sprite.position.distanceTo(page.position) < 25);
+      if (entityNearPage) {
+        const flicker = Math.random();
+        pageLight.intensity = flicker < 0.08 ? 0 :
+                              flicker < 0.15 ? 8 :
+                              22 + Math.sin(now * 0.03) * 6;
+      } else {
+        pageLight.intensity = 22;
+      }
+    }
 
     if (pp.distanceTo(page.position) < 1.5) {
       scene.remove(page);
@@ -1119,12 +1134,28 @@ function updateVigilante(ent, delta) {
   } else {
     ent.sprite.material.opacity = 1;
     if (ent.wasWatched && dist > 1.5) {
-      // Leave ghost at old position before teleporting
       spawnVigilanteAfterimage(ent.sprite.position.clone(), ent.sprite.material);
-      const dir  = camera.position.clone().sub(ent.sprite.position).normalize();
-      const jump = Math.min(dist * 0.55, 9);
-      ent.sprite.position.addScaledVector(dir, jump);
-      ent.sprite.position.y = ent.def.centerY;
+
+      // Teleport to the Spawn of the room closest to the midpoint between
+      // Vigilante and player — blocks the path between them
+      const mid = ent.sprite.position.clone().add(camera.position).multiplyScalar(0.5);
+      let bestRoom = null, bestDist = Infinity;
+      for (let ri = 0; ri < currentRooms.length; ri++) {
+        if (ri === 4) continue; // skip center room
+        const rp = currentRooms[ri].scene.position;
+        const d  = mid.distanceTo(rp);
+        if (d < bestDist) { bestDist = d; bestRoom = currentRooms[ri]; }
+      }
+      if (bestRoom) {
+        const spawn = bestRoom.scene.getObjectByName('Spawn').localToWorld(new THREE.Vector3());
+        ent.sprite.position.set(spawn.x, ent.def.centerY, spawn.z);
+      } else {
+        // Fallback: straight line jump
+        const dir  = camera.position.clone().sub(ent.sprite.position).normalize();
+        const jump = Math.min(dist * 0.55, 9);
+        ent.sprite.position.addScaledVector(dir, jump);
+        ent.sprite.position.y = ent.def.centerY;
+      }
     }
     ent.wasWatched = false;
   }
