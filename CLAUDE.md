@@ -99,13 +99,16 @@ All sounds in Spanish horror context. Current volumes:
 | Blackout not fully black | Fixed | CSS overlay + ambientLight.intensity = 0 |
 | El Devorador white background | Fixed | `darkBg: true` → AdditiveBlending |
 
-## Pendientes — bugs conocidos (verificados, listos para implementar)
+## Pendientes — mejoras de miedo (ideas para próximas sesiones)
 
-| # | Problema | Archivo | Detalle |
-|---|----------|---------|---------|
-| 1 | **Intro en inglés** | `index.html` | Líneas del lore siguen en inglés: `"You have no-clipped out of reality."`, `"Estimated square footage: 600,000,000+"`, `"Entities present: unknown"`. El juego debe estar completamente en español. |
-| 2 | **Barra de cordura invisible** | `style.css` + `main.js` | `#sanityBar` tiene solo 3px de alto, casi imperceptible durante el juego. Necesita más presencia visual. |
-| 3 | **"INTENTAR DE NUEVO" rompe en dos líneas** | `style.css` | Texto demasiado largo para el botón de 280px de ancho del menú final. |
+Estas ideas están definidas pero no implementadas aún:
+
+| # | Idea | Detalle |
+|---|------|---------|
+| 3 | **El Perdido te sigue cuando estás cerca** | Si el jugador está a menos de 12 unidades, El Perdido camina hacia él en vez de a su target aleatorio. Lento pero perturbador. |
+| 5 | **Pasos de El Devorador** | Sonido de pasos que se intensifica cuando el Devorador se acerca — el jugador lo oye antes de verlo. Requiere asset de audio. |
+| 9 | **Páginas parpadean con peligro cerca** | La luz de las páginas parpadea irregularmente cuando hay una entidad en el mismo cuarto. |
+| 10 | **El Vigilante bloquea pasillos** | Se teleporta hacia la puerta más cercana entre él y el jugador, no en línea recta. Fuerza a rodearlo. |
 
 ## Potential improvements (not yet done)
 

@@ -222,6 +222,7 @@ function showLore(level) {
 
 // Audio
 let walkingSound, buzzingSound, glitchSound, coughSound, deathSound, winSound;
+let breathingNode = null; // Web Audio API synth node for fear breathing
 let audioListener = null;
 let audioLoader;
 let animFrameId = null;
@@ -311,6 +312,10 @@ async function init() {
     introObj.textContent = `Recoge ${n} página${n > 1 ? 's' : ''} esparcidas por el mapa. Luego aparecerá la salida.`;
   }
   resetSanityFX();
+  if (breathingNode) {
+    try { breathingNode.noise.stop(); breathingNode.lfo.stop(); } catch(_) {}
+    breathingNode = null;
+  }
   // Reset page counter
   const pageCounter = document.getElementById('pageCounter');
   if (pageCounter) { pageCounter.innerHTML = ''; pageCounter.style.opacity = '0'; }
@@ -516,6 +521,54 @@ function initAudio() {
   audioLoader.load('./sounds/win.mp3', buf => {
     winSound.setBuffer(buf); winSound.setLoop(false); winSound.setVolume(0.6);
   });
+}
+
+function updateBreathing(fear) {
+  if (!audioListener) return;
+  const ctx = audioListener.context;
+  if (ctx.state === 'suspended') return;
+
+  if (fear > 0.45 && !breathingNode) {
+    // Synthesize breathing: filtered noise shaped by a slow LFO
+    const bufLen = ctx.sampleRate * 3;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf; noise.loop = true;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass'; filter.frequency.value = 500; filter.Q.value = 1.2;
+
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.3;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 350;
+    lfo.connect(lfoGain); lfoGain.connect(filter.frequency);
+
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = 0;
+    noise.connect(filter); filter.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    noise.start(); lfo.start();
+    breathingNode = { noise, lfo, gainNode };
+  }
+
+  if (breathingNode) {
+    if (fear <= 0.35) {
+      breathingNode.gainNode.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
+      setTimeout(() => {
+        try { breathingNode.noise.stop(); breathingNode.lfo.stop(); } catch(_) {}
+        breathingNode = null;
+      }, 2000);
+    } else {
+      const targetVol = Math.min((fear - 0.45) * 0.18 * volumeLevel, 0.12);
+      breathingNode.gainNode.gain.setTargetAtTime(targetVol, ctx.currentTime, 0.8);
+      breathingNode.lfo.frequency.setTargetAtTime(0.25 + fear * 0.4, ctx.currentTime, 1);
+    }
+  }
 }
 
 // ─── Lights ───────────────────────────────────────────────────────────────────
@@ -981,6 +1034,8 @@ function applySanityFX() {
 
   // Level indicator
   levelIndicator.textContent = LEVEL_CONFIGS[currentLevel].name;
+
+  updateBreathing(fear);
 }
 
 function resetSanityFX() {
@@ -1046,6 +1101,24 @@ function trySpawnEntities() {
 }
 
 // El Vigilante — freezes when watched, teleports closer when you look away
+function spawnVigilanteAfterimage(pos, material) {
+  // Leave a fading ghost where the Vigilante was
+  const ghost = new THREE.Sprite(material.clone());
+  ghost.material.opacity = 0.55;
+  ghost.material.transparent = true;
+  ghost.scale.copy(new THREE.Vector3(2.4, 2.4, 1));
+  ghost.position.copy(pos);
+  scene.add(ghost);
+  const start = performance.now();
+  function fade() {
+    const t = (performance.now() - start) / 600;
+    if (t >= 1) { scene.remove(ghost); ghost.material.dispose(); return; }
+    ghost.material.opacity = 0.55 * (1 - t);
+    requestAnimationFrame(fade);
+  }
+  fade();
+}
+
 function updateVigilante(ent, delta) {
   const looking = isLookingAt(ent.sprite.position);
   const dist    = camera.position.distanceTo(ent.sprite.position);
@@ -1055,9 +1128,11 @@ function updateVigilante(ent, delta) {
     ent.wasWatched = true;
   } else {
     ent.sprite.material.opacity = 1;
-    if (ent.wasWatched && dist > 3) {
+    if (ent.wasWatched && dist > 1.5) {
+      // Leave ghost at old position before teleporting
+      spawnVigilanteAfterimage(ent.sprite.position.clone(), ent.sprite.material);
       const dir  = camera.position.clone().sub(ent.sprite.position).normalize();
-      const jump = Math.min(dist * 0.45, 7);
+      const jump = Math.min(dist * 0.55, 9);
       ent.sprite.position.addScaledVector(dir, jump);
       ent.sprite.position.y = ent.def.centerY;
     }
@@ -1083,20 +1158,25 @@ function updateDevorador(ent, delta) {
   const ecfg  = LEVEL_CONFIGS[currentLevel];
   const speed = ecfg.speedBase + fear * ecfg.speedFear;
 
-  // LOS is expensive — cache result for 3 frames
   if (ent._losFrame === undefined || frameCount - ent._losFrame >= 8) {
     ent._losCache = hasLineOfSight(ent.sprite.position, pp);
     ent._losFrame = frameCount;
   }
   const canSee = ent._losCache;
+  const wasBlind = ent._wasBlind ?? true;
 
   if (canSee) {
+    // #6 — brief silence on first spot (contrast makes glitch scarier)
+    if (wasBlind) ent._silenceTimer = 0.25;
+
     ent.lastKnownPos = pp.clone();
     ent.lostSightTimer = 0;
+    ent._wasBlind = false;
     const dir = pp.clone().sub(ent.sprite.position);
     dir.y = 0; dir.normalize();
     ent.sprite.position.addScaledVector(dir, speed * delta);
   } else {
+    ent._wasBlind = true;
     ent.lostSightTimer = (ent.lostSightTimer ?? 0) + delta;
     if (ent.lastKnownPos && ent.lostSightTimer < 4) {
       const dir = ent.lastKnownPos.clone().sub(ent.sprite.position);
@@ -1105,10 +1185,43 @@ function updateDevorador(ent, delta) {
         dir.normalize();
         ent.sprite.position.addScaledVector(dir, speed * 0.5 * delta);
       }
+    } else if (ent.lostSightTimer >= 4 && !ent._teleportedBehind && currentRooms?.length) {
+      // #2 — teleport silently behind the player
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      const behindRooms = currentRooms.filter((r, i) => {
+        const rp = r.scene.position;
+        const toRoom = new THREE.Vector3(rp.x - pp.x, 0, rp.z - pp.z).normalize();
+        return camDir.dot(toRoom) < -0.3 && i !== 4;
+      });
+      const pool = behindRooms.length > 0 ? behindRooms : currentRooms.filter((_, i) => i !== 4);
+      const room = pool[Math.floor(Math.random() * pool.length)];
+      const spawn = room.scene.getObjectByName('Spawn').localToWorld(new THREE.Vector3());
+      ent.sprite.position.set(spawn.x, ent.def.centerY, spawn.z);
+      ent._teleportedBehind = true;
+      ent.lostSightTimer = 0;
+      ent.lastKnownPos = null;
     }
   }
 
+  // Reset teleport flag when it becomes active again
+  if (canSee) ent._teleportedBehind = false;
+
+  // #6 — silence timer before glitch plays on first spot
+  if (ent._silenceTimer !== undefined) {
+    ent._silenceTimer -= delta;
+    if (ent._silenceTimer < 0) ent._silenceTimer = undefined;
+  }
+  ent._silenceActive = (ent._silenceTimer !== undefined && ent._silenceTimer > 0);
+
   ent.sprite.position.y = ent.def.centerY;
+
+  // #8 — camera shake when Devorador is very close
+  if (canSee && dist < 8) {
+    const intensity = (1 - dist / 8) * 0.012;
+    controls.object.rotation.x += (Math.random() - 0.5) * intensity;
+    controls.object.rotation.z += (Math.random() - 0.5) * intensity;
+  }
 }
 
 // El Perdido — wanders between room spawn points, attacks on touch
@@ -1151,13 +1264,14 @@ function updateEntities(delta) {
     }
   }
 
-  // Central glitch sound control — Devorador (chase) takes priority over Vigilante (watched)
+  // Central glitch sound — Devorador chase takes priority; respect silence timer (#6)
   const pp = controls.object.position;
-  const devActive = entities.some(e => e.active && e.def.id === 'devorador' &&
-    (e._losCache || pp.distanceTo(e.sprite.position) < 3));
-  const vigWatched = !devActive && entities.some(e => e.active && e.def.id === 'vigilante' &&
+  const devEnt = entities.find(e => e.active && e.def.id === 'devorador');
+  const devChasing = devEnt && (devEnt._losCache || pp.distanceTo(devEnt.sprite.position) < 3);
+  const devSilent  = devEnt?._silenceActive;
+  const vigWatched = !devChasing && entities.some(e => e.active && e.def.id === 'vigilante' &&
     isLookingAt(e.sprite.position));
-  const wantGlitch = devActive || vigWatched;
+  const wantGlitch = (devChasing && !devSilent) || vigWatched;
   if (wantGlitch && glitchSound?.buffer && !glitchSound.isPlaying) glitchSound.play();
   if (!wantGlitch && glitchSound?.isPlaying) glitchSound.stop();
 }
