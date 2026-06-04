@@ -260,6 +260,7 @@ let gameWon        = false;
 let playerMovement = false;
 let startTime;
 let deathMessage   = '';
+let killerSrc      = '';
 
 // DOM
 const introScreen     = document.getElementById('introScreen');
@@ -314,7 +315,8 @@ async function init() {
   exitMesh = null;
   sanity = 100;
   entityNearby = inBlackout = false;
-  entityRespawnTimer = 15; // slight delay before first periodic check
+  entityRespawnTimer = 15;
+  killerSrc = '';
   entities = [];
   usedLoreIndices = new Set();
   const cfg = LEVEL_CONFIGS[currentLevel];
@@ -1456,6 +1458,7 @@ function checkEntityKills() {
     const dist = pp.distanceTo(ent.sprite.position);
     if (dist <= ent.def.killDist) {
       deathMessage = ent.def.deathMsg;
+      killerSrc    = ent.def.src;
       return true;
     }
   }
@@ -1605,7 +1608,19 @@ async function triggerDeath() {
   playerMovement = false;
   gameLost = true;
   glitchSound.stop();
-  if (jumpscareSound?.buffer) jumpscareSound.play();
+
+  // Flash the killer's face fullscreen
+  const jumpscareEl  = document.getElementById('jumpscareOverlay');
+  const jumpscareImg = document.getElementById('jumpscareImg');
+  if (killerSrc && jumpscareEl && jumpscareImg) {
+    if (jumpscareSound?.buffer && !jumpscareSound.isPlaying) jumpscareSound.play();
+    jumpscareImg.src = killerSrc;
+    jumpscareEl.classList.add('active');
+    await sleep(900);
+    jumpscareEl.classList.remove('active');
+    jumpscareImg.src = '';
+  }
+
   deathSound.play();
 
   vignette.style.transition = 'none';

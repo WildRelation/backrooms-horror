@@ -591,6 +591,30 @@ canvas {
   text-align: center;
 }
 
+/* ── Jumpscare overlay ── */
+#jumpscareOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 90;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+#jumpscareOverlay.active { display: flex; }
+#jumpscareImg {
+  max-height: 100vh;
+  max-width: 100vw;
+  object-fit: contain;
+  animation: jumpscareRush 0.25s ease-out forwards;
+}
+@keyframes jumpscareRush {
+  0%   { transform: scale(0.55); filter: brightness(0.3); }
+  60%  { transform: scale(1.08); filter: brightness(1.4); }
+  100% { transform: scale(1.0);  filter: brightness(1.0); }
+}
+
 /* ── Pause overlay ── */
 #pauseOverlay {
   display: none;
