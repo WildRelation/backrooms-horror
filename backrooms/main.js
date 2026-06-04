@@ -108,6 +108,7 @@ const ENTITY_DEFS = [
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let scene, camera, renderer, controls;
+let ambientLight;
 let raycaster;
 let prevTime;
 let direction, velocity;
@@ -366,7 +367,8 @@ async function init() {
   }
 
   // Lighting
-  scene.add(new THREE.AmbientLight(cfg.ambientColor, 0.8));
+  ambientLight = new THREE.AmbientLight(cfg.ambientColor, 0.8);
+  scene.add(ambientLight);
   initRoomLights(cfg);
 
   // Room grid
@@ -558,6 +560,7 @@ function updateRoomLights(delta, time) {
       if (st.blackoutDuration <= 0) st.blackoutActive = false;
       continue;
     }
+
     if (st.stutterActive) {
       st.stutterDuration -= delta;
       light.intensity = Math.random() < 0.5 ? 0 : st.baseIntensity * 0.4;
@@ -567,6 +570,7 @@ function updateRoomLights(delta, time) {
     light.intensity = st.baseIntensity * (Math.sin(time * st.freq + st.phase) * 0.08 + 1.0);
   }
   inBlackout = anyBlackout;
+  if (ambientLight) ambientLight.intensity = anyBlackout ? 0 : 0.8;
 }
 
 // ─── Asset loading ────────────────────────────────────────────────────────────
