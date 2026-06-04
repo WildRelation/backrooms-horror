@@ -78,11 +78,19 @@ See GitHub Issues for full history. Summary:
 
 ## Potential improvements (not yet done)
 
-- **Draco compression** — rooms are ~20MB each (180MB total at startup). Draco would
-  reduce to ~3–5MB each. Requires `@gltf-transform/cli` to re-compress GLBs and
-  adding `DRACOLoader` to Three.js setup. No Blender needed.
 - **Nginx gzip for GLBs** — currently `gzip_types` only covers text/JS/CSS. Adding
   `application/octet-stream` could help KTH Cloud delivery slightly.
+
+## Pendientes — bugs conocidos (verificados en sesión anterior)
+
+Estos tres problemas fueron identificados mediante prueba visual en el navegador y
+están listos para implementar en la próxima sesión:
+
+| # | Problema | Archivo | Detalle |
+|---|----------|---------|---------|
+| 1 | **Intro en inglés** | `index.html` | Las líneas del lore en la pantalla de inicio siguen en inglés: `"You have no-clipped out of reality."`, `"Estimated square footage: 600,000,000+"`, `"Entities present: unknown"`. Todo el juego debe estar en español. |
+| 2 | **Barra de cordura invisible** | `style.css` + `main.js` | El `#sanityBar` tiene solo 3px de alto y es casi imperceptible durante el juego. Necesita más presencia visual para que el jugador entienda su estado de cordura. |
+| 3 | **"INTENTAR DE NUEVO" rompe en dos líneas** | `style.css` | El texto del botón de reinicio es demasiado largo para el ancho del menú (280px). Reducir el texto o ampliar el botón. |
 
 ## Development workflow
 
