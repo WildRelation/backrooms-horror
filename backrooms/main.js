@@ -255,6 +255,7 @@ const sanityFillEl    = document.getElementById('sanityFill');
 const levelIndicator  = document.getElementById('levelIndicator');
 const pauseOverlay    = document.getElementById('pauseOverlay');
 const menuLevelEl     = document.getElementById('menuLevel');
+const blackoutOverlay = document.getElementById('blackoutOverlay');
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -571,6 +572,7 @@ function updateRoomLights(delta, time) {
   }
   inBlackout = anyBlackout;
   if (ambientLight) ambientLight.intensity = anyBlackout ? 0 : 0.8;
+  blackoutOverlay?.classList.toggle('active', anyBlackout);
 }
 
 // ─── Asset loading ────────────────────────────────────────────────────────────

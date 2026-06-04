@@ -461,6 +461,18 @@ canvas {
   inset: 0;
 }
 
+/* ── Blackout overlay ── */
+#blackoutOverlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 8;
+  opacity: 0;
+  transition: opacity 0.08s ease;
+}
+#blackoutOverlay.active { opacity: 1; }
+
 /* ── Sanity bar ── */
 #sanityBar {
   position: fixed;
