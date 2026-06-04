@@ -221,8 +221,7 @@ function showLore(level) {
 }
 
 // Audio
-let walkingSound, buzzingSound, glitchSound, coughSound, deathSound, winSound;
-let breathingNode = null; // Web Audio API synth node for fear breathing
+let walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, deathSound, winSound;
 let audioListener = null;
 let audioLoader;
 let animFrameId = null;
@@ -274,7 +273,7 @@ async function init() {
   }
 
   // Stop all sounds from previous session
-  [walkingSound, buzzingSound, glitchSound, coughSound, deathSound, winSound]
+  [walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, deathSound, winSound]
     .forEach(s => { try { if (s?.isPlaying) s.stop(); } catch(_) {} });
   // Reset buzzing — will restart after next pointer lock
 
@@ -312,10 +311,7 @@ async function init() {
     introObj.textContent = `Recoge ${n} página${n > 1 ? 's' : ''} esparcidas por el mapa. Luego aparecerá la salida.`;
   }
   resetSanityFX();
-  if (breathingNode) {
-    try { breathingNode.noise.stop(); breathingNode.lfo.stop(); } catch(_) {}
-    breathingNode = null;
-  }
+  if (breathingSound?.isPlaying) breathingSound.stop();
   // Reset page counter
   const pageCounter = document.getElementById('pageCounter');
   if (pageCounter) { pageCounter.innerHTML = ''; pageCounter.style.opacity = '0'; }
@@ -515,6 +511,10 @@ function initAudio() {
   audioLoader.load('./sounds/cough.mp3', buf => {
     coughSound.setBuffer(buf); coughSound.setLoop(false); coughSound.setVolume(0.35);
   });
+  breathingSound = new THREE.Audio(listener);
+  audioLoader.load('./sounds/breathing.mp3', buf => {
+    breathingSound.setBuffer(buf); breathingSound.setLoop(true); breathingSound.setVolume(0);
+  });
   audioLoader.load('./sounds/death.mp3', buf => {
     deathSound.setBuffer(buf); deathSound.setLoop(false); deathSound.setVolume(0.6);
   });
@@ -524,50 +524,13 @@ function initAudio() {
 }
 
 function updateBreathing(fear) {
-  if (!audioListener) return;
-  const ctx = audioListener.context;
-  if (ctx.state === 'suspended') return;
-
-  if (fear > 0.45 && !breathingNode) {
-    // Synthesize breathing: filtered noise shaped by a slow LFO
-    const bufLen = ctx.sampleRate * 3;
-    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
-
-    const noise = ctx.createBufferSource();
-    noise.buffer = buf; noise.loop = true;
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass'; filter.frequency.value = 500; filter.Q.value = 1.2;
-
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.3;
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 350;
-    lfo.connect(lfoGain); lfoGain.connect(filter.frequency);
-
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = 0;
-    noise.connect(filter); filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    noise.start(); lfo.start();
-    breathingNode = { noise, lfo, gainNode };
-  }
-
-  if (breathingNode) {
-    if (fear <= 0.35) {
-      breathingNode.gainNode.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
-      setTimeout(() => {
-        try { breathingNode.noise.stop(); breathingNode.lfo.stop(); } catch(_) {}
-        breathingNode = null;
-      }, 2000);
-    } else {
-      const targetVol = Math.min((fear - 0.45) * 0.18 * volumeLevel, 0.12);
-      breathingNode.gainNode.gain.setTargetAtTime(targetVol, ctx.currentTime, 0.8);
-      breathingNode.lfo.frequency.setTargetAtTime(0.25 + fear * 0.4, ctx.currentTime, 1);
-    }
+  if (!breathingSound?.buffer) return;
+  if (fear > 0.45) {
+    const vol = Math.min((fear - 0.45) * 0.7, 0.35);
+    breathingSound.setVolume(vol);
+    if (!breathingSound.isPlaying) breathingSound.play();
+  } else {
+    if (breathingSound.isPlaying) breathingSound.stop();
   }
 }
 
