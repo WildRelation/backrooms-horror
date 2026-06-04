@@ -138,10 +138,10 @@ let flickerStates = [];
 
 // Sanity
 let sanity;
-const SANITY_DRAIN_STILL  = 5;
-const SANITY_DRAIN_SPRINT = 8;
-const SANITY_DRAIN_DARK   = 6;
-const SANITY_RECOVER      = 0.4;
+const SANITY_DRAIN_STILL  = 5;    // /s standing still
+const SANITY_DRAIN_SPRINT = 3;    // /s while sprinting (no recovery when sprinting)
+const SANITY_DRAIN_DARK   = 6;    // /s during blackout
+const SANITY_RECOVER      = 2.5;  // /s only while walking (not sprinting, not still)
 const SPRINT_MULTIPLIER   = 1.9;
 
 // Level
@@ -916,9 +916,10 @@ function updateSanity(delta) {
   const lcfg = LEVEL_CONFIGS[currentLevel];
   let drain = lcfg.drainIdle;
 
-  // Standing still is dangerous — you have to keep moving
-  const isMoving = moveForward || moveBackward || moveLeft || moveRight;
-  if (!isMoving)   drain += SANITY_DRAIN_STILL;
+  const isMoving   = moveForward || moveBackward || moveLeft || moveRight;
+  const isWalking  = isMoving && !isSprinting;
+
+  if (!isMoving)            drain += SANITY_DRAIN_STILL;
   if (isSprinting && isMoving) drain += SANITY_DRAIN_SPRINT;
 
   const pp = controls.object.position;
@@ -932,7 +933,21 @@ function updateSanity(delta) {
     }
   }
   if (inBlackout) drain += SANITY_DRAIN_DARK;
-  sanity = clamp(sanity - drain * delta + SANITY_RECOVER * delta, 0, 100);
+
+  // Recovery only while walking — incentivizes constant movement
+  const recover = isWalking ? SANITY_RECOVER : 0;
+  const prev = sanity;
+  sanity = clamp(sanity - drain * delta + recover * delta, 0, 100);
+
+  // At 0 sanity: trigger a forced blackout as consequence
+  if (prev > 0 && sanity === 0 && !inBlackout) triggerSanityCollapse();
+}
+
+function triggerSanityCollapse() {
+  // Force a 4s blackout — consequence for hitting 0 sanity
+  inBlackout = true;
+  sanity = 5; // give a small buffer so it doesn't immediately loop
+  setTimeout(() => { inBlackout = false; }, 4000);
 }
 
 function applySanityFX() {
