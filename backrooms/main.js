@@ -476,7 +476,7 @@ function onControlsUnlock() {
       gamePaused = true;
       pauseOverlay.classList.add('show');
       timerHint.classList.remove('show');
-      [buzzingSound, glitchSound, breathingSound, stepsDevSound, walkingSound, ...ambientSounds]
+      [buzzingSound, glitchSound, breathingSound, stepsDevSound, walkingSound]
         .forEach(s => { try { if (s?.isPlaying) s.stop(); } catch(_) {} });
     }
   }
