@@ -890,11 +890,17 @@ function spawnEntityNearPage(pagePos) {
 function trySpawnPage() {
   if (pageMeshes.length >= 2) return;
   if (pagesCollected + pageMeshes.length >= LEVEL_CONFIGS[currentLevel].pagesNeeded) return;
-  if (Math.random() > 0.75) return; // 75% chance per room transition
+  if (Math.random() > 0.75) return;
 
-  let idx = Math.floor(Math.random() * 8);
-  if (idx >= 4) idx++;
-  spawnPageAt(idx);
+  // Pick a room whose Spawn point is far enough from all existing pages
+  const slots = [0,1,2,3,5,6,7,8].sort(() => Math.random() - 0.5);
+  for (const idx of slots) {
+    const spawnObj = currentRooms[idx].scene.getObjectByName('Spawn');
+    if (!spawnObj) continue;
+    const sp = spawnObj.localToWorld(new THREE.Vector3());
+    const tooClose = pageMeshes.some(p => p.position.distanceTo(sp) < 20);
+    if (!tooClose) { spawnPageAt(idx); return; }
+  }
 }
 
 function updatePages() {
