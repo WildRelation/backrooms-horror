@@ -476,7 +476,12 @@ function initAudio() {
     // Play only after user gesture — browsers block audio before interaction
   });
   audioLoader.load('./sounds/glitch.mp3', buf => {
-    glitchSound.setBuffer(buf); glitchSound.setLoop(false); glitchSound.setVolume(0.6);
+    glitchSound.setBuffer(buf); glitchSound.setLoop(false); glitchSound.setVolume(0.22);
+    // Low-pass filter to cut the harsh high frequencies
+    const lpf = listener.context.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = 1400;
+    glitchSound.setFilter(lpf);
   });
   audioLoader.load('./sounds/death.mp3', buf => {
     deathSound.setBuffer(buf); deathSound.setLoop(false); deathSound.setVolume(0.6);
