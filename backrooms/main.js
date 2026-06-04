@@ -23,8 +23,8 @@ const LEVEL_CONFIGS = [
     maxEntities: 1,
     speedBase:   2.0, speedFear: 3.0,
     drainIdle:   1.2, drainEntity: 14,
-    cooldowns:   { vigilante: 40, devorador: 35, perdido: 50 },
-    initCooldowns:{ vigilante: 20, devorador: 15, perdido: 25 },
+    cooldowns:   { vigilante: 40, devorador: 35, perdido: 50, warcnegro: 9999 },
+    initCooldowns:{ vigilante: 20, devorador: 15, perdido: 25, warcnegro: 9999 },
   },
   {
     name:        'Nivel 1 — Habitable Zone',
@@ -37,8 +37,8 @@ const LEVEL_CONFIGS = [
     maxEntities: 2,
     speedBase:   3.0, speedFear: 4.5,
     drainIdle:   1.8, drainEntity: 16,
-    cooldowns:   { vigilante: 28, devorador: 22, perdido: 35 },
-    initCooldowns:{ vigilante: 12, devorador: 10, perdido: 18 },
+    cooldowns:   { vigilante: 28, devorador: 22, perdido: 35, warcnegro: 9999 },
+    initCooldowns:{ vigilante: 12, devorador: 10, perdido: 18, warcnegro: 9999 },
   },
   {
     name:        'Nivel 2 — Pipe Dreams',
@@ -51,8 +51,8 @@ const LEVEL_CONFIGS = [
     maxEntities: 2,
     speedBase:   4.0, speedFear: 5.5,
     drainIdle:   2.5, drainEntity: 20,
-    cooldowns:   { vigilante: 20, devorador: 16, perdido: 25 },
-    initCooldowns:{ vigilante: 8,  devorador: 6,  perdido: 12 },
+    cooldowns:   { vigilante: 20, devorador: 16, perdido: 25, warcnegro: 45 },
+    initCooldowns:{ vigilante: 8,  devorador: 6,  perdido: 12, warcnegro: 30 },
   },
   {
     name:        'Nivel 3 — Electrical Station',
@@ -65,8 +65,8 @@ const LEVEL_CONFIGS = [
     maxEntities: 3,
     speedBase:   4.5, speedFear: 5.5,
     drainIdle:   2.5, drainEntity: 18,
-    cooldowns:   { vigilante: 14, devorador: 10, perdido: 18 },
-    initCooldowns:{ vigilante: 4,  devorador: 8,  perdido: 6  },
+    cooldowns:   { vigilante: 14, devorador: 10, perdido: 18, warcnegro: 30 },
+    initCooldowns:{ vigilante: 4,  devorador: 8,  perdido: 6,  warcnegro: 15 },
   },
 ];
 
@@ -102,6 +102,17 @@ const ENTITY_DEFS = [
     deathMsg: 'No estabas solo.',
     darkBg: false,
     spawnCooldown: 30,
+  },
+  {
+    id: 'warcnegro',
+    src: './images/entity_warcnegro.png',
+    w: 2.4, h: 2.4,
+    centerY: 1.65,
+    killDist: 1.0,
+    deathMsg: 'La oscuridad te consumió.',
+    darkBg: true,
+    spawnCooldown: 35,
+    minLevel: 2,              // only appears in levels 2 and 3
   },
 ];
 
@@ -1141,6 +1152,7 @@ function trySpawnEntities() {
   if (activeCount() >= LEVEL_CONFIGS[currentLevel].maxEntities) return;
   for (const ent of entities) {
     if (ent.active) continue;
+    if ((ent.def.minLevel ?? 0) > currentLevel) continue;
     if ((spawnCooldowns[ent.def.id] ?? 0) > 0) continue;
     if (Math.random() > 0.35) continue;
     if (activeCount() >= LEVEL_CONFIGS[currentLevel].maxEntities) break;
@@ -1353,6 +1365,25 @@ function updatePerdido(ent, delta) {
   }
 }
 
+// Warc Negro — solo se mueve en la oscuridad, se congela con la luz
+function updateWarcNegro(ent, delta) {
+  if (!inBlackout) {
+    // Congelado mientras haya luz — ni se mueve ni ataca
+    ent.sprite.material.opacity = 0.85;
+    return;
+  }
+  // En la oscuridad: avanza lentamente hacia el jugador
+  ent.sprite.material.opacity = 1;
+  const pp  = controls.object.position;
+  const dir = pp.clone().sub(ent.sprite.position);
+  dir.y = 0;
+  if (dir.length() > 0.5) {
+    dir.normalize();
+    ent.sprite.position.addScaledVector(dir, 1.8 * delta);
+  }
+  ent.sprite.position.y = ent.def.centerY;
+}
+
 function updateEntities(delta) {
   for (const id in spawnCooldowns) spawnCooldowns[id] = Math.max(0, spawnCooldowns[id] - delta);
 
@@ -1360,9 +1391,10 @@ function updateEntities(delta) {
     if (!ent.active) continue;
     if (isOutOfBounds(ent.sprite.position)) { deactivateEntity(ent); continue; }
     switch (ent.def.id) {
-      case 'vigilante': updateVigilante(ent, delta); break;
-      case 'devorador': updateDevorador(ent, delta); break;
-      case 'perdido':   updatePerdido(ent, delta);   break;
+      case 'vigilante':  updateVigilante(ent, delta);  break;
+      case 'devorador':  updateDevorador(ent, delta);  break;
+      case 'perdido':    updatePerdido(ent, delta);    break;
+      case 'warcnegro':  updateWarcNegro(ent, delta);  break;
     }
   }
 
