@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
@@ -541,8 +542,16 @@ function updateRoomLights(delta, time) {
 
 // ─── Asset loading ────────────────────────────────────────────────────────────
 
-async function loadAssets(onProgress) {
+function makeGLTFLoader() {
+  const draco = new DRACOLoader();
+  draco.setDecoderPath('./draco/');
   const loader = new GLTFLoader();
+  loader.setDRACOLoader(draco);
+  return loader;
+}
+
+async function loadAssets(onProgress) {
+  const loader = makeGLTFLoader();
   let loaded = 0;
   const loadGLB = id => loader.loadAsync(`./models/${id}.glb`).then(glb => {
     onProgress?.(++loaded);
@@ -602,7 +611,7 @@ async function loadAssets(onProgress) {
 // ─── Reserve room background loader ──────────────────────────────────────────
 
 async function loadReserveRooms() {
-  const loader = new GLTFLoader();
+  const loader = makeGLTFLoader();
   try {
     [room10, room11, room12] = await Promise.all([
       loader.loadAsync('./models/room10.glb'),
