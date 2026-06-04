@@ -826,8 +826,9 @@ function setupScene() {
 function spawnPageAt(roomIdx) {
   if (pagesCollected + pageMeshes.length >= LEVEL_CONFIGS[currentLevel].pagesNeeded) return;
 
-  // Use room center so pages never spawn inside walls
-  const rp = currentRooms[roomIdx].scene.position;
+  // Use the room's Spawn point — same anchor used by player and entities, guaranteed interior
+  const spawnObj = currentRooms[roomIdx].scene.getObjectByName('Spawn');
+  const rp = spawnObj ? spawnObj.localToWorld(new THREE.Vector3()) : currentRooms[roomIdx].scene.position.clone();
 
   // Large bright white page — visible from across the room
   const page = new THREE.Mesh(
@@ -840,8 +841,8 @@ function spawnPageAt(roomIdx) {
       depthWrite: false,
     })
   );
-  const offsetX = rand(-1.5, 1.5);
-  const offsetZ = rand(-1.5, 1.5);
+  const offsetX = rand(-0.5, 0.5);
+  const offsetZ = rand(-0.5, 0.5);
   page.position.set(rp.x + offsetX, 0.9, rp.z + offsetZ);
   page.rotation.y = Math.random() * Math.PI * 2;
 
@@ -1027,10 +1028,11 @@ function spawnExit() {
   exitLight.position.set(0, 0, 0.5);
   exitMesh.add(exitLight);
 
-  // Spawn at room center (scene.position), never at Spawn point which is near walls
+  // Use the room's Spawn point — guaranteed interior position
   let idx = Math.floor(Math.random() * 8);
   if (idx >= 4) idx++;
-  const rc = currentRooms[idx].scene.position;
+  const exitSpawnObj = currentRooms[idx].scene.getObjectByName('Spawn');
+  const rc = exitSpawnObj ? exitSpawnObj.localToWorld(new THREE.Vector3()) : currentRooms[idx].scene.position.clone();
   exitMesh.position.set(rc.x, 1.45, rc.z);
   scene.add(exitMesh);
 
