@@ -781,6 +781,26 @@ function updatePageCounter() {
   el.style.opacity = '1';
 }
 
+function updatePageRadar() {
+  const el = document.getElementById('pageRadar');
+  if (!el || !gameActive || exitMesh) { el?.classList.remove('show'); return; }
+
+  const pp = controls.object.position;
+  // Check if any page is within the current 9-room grid (~75 units radius)
+  const pageNearby = pageMeshes.some(p => pp.distanceTo(p.position) < 75);
+
+  el.classList.add('show');
+  if (pageNearby) {
+    el.textContent = '●';
+    el.title = 'hay una página cerca';
+    el.classList.remove('far');
+  } else {
+    el.textContent = '○';
+    el.title = 'no hay páginas en esta área — sigue caminando';
+    el.classList.add('far');
+  }
+}
+
 function updatePageCompass() {
   const compass = document.getElementById('pageCompass');
   const arrow   = document.getElementById('pageCompassArrow');
@@ -1340,7 +1360,7 @@ function animate() {
     updateEntities(delta);
     // Throttle non-critical updates — run every N frames
     if (frameCount % 2 === 0) updatePages();
-    if (frameCount % 4 === 0) updatePageCompass();
+    if (frameCount % 4 === 0) { updatePageCompass(); updatePageRadar(); }
 
     // Pulse exit
     if (exitMesh) {

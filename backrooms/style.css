@@ -401,6 +401,24 @@ input[type="range"]::-moz-range-track {
   animation: winFade 5s ease-in forwards;
 }
 
+/* ── Page radar ── */
+#pageRadar {
+  position: fixed;
+  bottom: 2em;
+  left: 2em;
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.5s;
+  color: rgba(255, 255, 255, 0.6);
+  text-shadow: 0 0 8px rgba(255,255,255,0.5);
+  letter-spacing: 0.05em;
+}
+#pageRadar.show  { opacity: 1; }
+#pageRadar.far   { color: rgba(255,255,255,0.2); text-shadow: none; }
+
 /* ── Lore text overlay ── */
 #loreText {
   position: fixed;
