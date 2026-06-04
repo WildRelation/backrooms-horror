@@ -1583,14 +1583,29 @@ async function triggerWin() {
     colorScreen.className = '';
     await init();
   } else {
-    // Final victory
-    vignette.style.transition = 'opacity 4s'; vignette.style.opacity = '0';
-    colorScreen.style.display = 'block'; colorScreen.classList.add('winScreen');
-    endMessage.style.display = 'flex';
-    endMessage.style.color = '#d4b060';
-    endMessage.textContent = 'Escapaste. Todos los niveles superados.';
-    await sleep(5000);
+    // Final victory — dramatic sequence
+    const finalScreen = document.getElementById('finalScreen');
+    const lines = ['fTitle', 'fSub', 'fSub2', 'fThanks', 'fCredit'].map(id => document.getElementById(id));
+
+    // Fade out the game
+    vignette.style.transition = 'opacity 3s'; vignette.style.opacity = '1';
+    vignette.style.background = 'rgba(0,0,0,1)';
+    await sleep(3000);
+
+    finalScreen.classList.add('show');
+
+    // Reveal each line one by one
+    const delays = [0, 2200, 4000, 6200, 8000];
+    for (let i = 0; i < lines.length; i++) {
+      setTimeout(() => lines[i]?.classList.add('visible'), delays[i]);
+    }
+
+    await sleep(11000);
     showEndMenu();
+    finalScreen.classList.remove('show');
+    lines.forEach(l => l?.classList.remove('visible'));
+    vignette.style.transition = '';
+    vignette.style.background = '';
   }
 }
 

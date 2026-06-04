@@ -401,6 +401,49 @@ input[type="range"]::-moz-range-track {
   animation: winFade 5s ease-in forwards;
 }
 
+/* ── Final victory screen ── */
+#finalScreen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.8em;
+  font-family: 'Courier New', monospace;
+  text-align: center;
+  padding: 2em;
+}
+#finalScreen.show { display: flex; }
+.final-line {
+  opacity: 0;
+  transition: opacity 1.8s ease;
+  letter-spacing: 0.15em;
+}
+.final-line.visible { opacity: 1; }
+.final-title {
+  font-size: 2rem;
+  color: #e8c860;
+  text-shadow: 0 0 30px rgba(232,200,96,0.6);
+  letter-spacing: 0.4em;
+}
+.final-sub {
+  font-size: 0.95rem;
+  color: rgba(200, 184, 122, 0.7);
+}
+.final-thanks {
+  font-size: 0.8rem;
+  color: rgba(200, 184, 122, 0.5);
+  margin-top: 1em;
+}
+.final-credit {
+  font-size: 0.65rem;
+  color: rgba(200, 184, 122, 0.3);
+  letter-spacing: 0.2em;
+}
+
 /* ── Page radar ── */
 #pageRadar {
   position: fixed;
