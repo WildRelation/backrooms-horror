@@ -154,6 +154,50 @@ let pageMeshes     = [];   // active page objects in the world
 let exitMesh       = null;
 let exitSpawned    = false;
 
+// Lore texts per level — shown when a page is collected
+const LEVEL_LORE = [
+  [ // Nivel 0 — El Lobby
+    '"el zumbido nunca para.\nllevo aquí 47 días."',
+    '"sigue caminando.\nquedarte quieto los atrae."',
+    '"encontré esta nota en el suelo.\ndecía exactamente esto."',
+    '"las luces no tienen interruptores.\nnunca se apagan."',
+  ],
+  [ // Nivel 1 — Habitable Zone
+    '"las tuberías no deberían\nhacer ese ruido."',
+    '"vi a alguien en el pasillo.\nno era humano."',
+    '"el agua huele a almendra.\nno la bebas."',
+    '"hay camas aquí. usadas.\naún calientes."',
+  ],
+  [ // Nivel 2 — Pipe Dreams
+    '"la oscuridad aquí tiene peso."',
+    '"los conductos se mueven.\nlo escucho por las noches."',
+    '"día 12. mi linterna murió.\nno estoy solo."',
+    '"caminé durante horas.\nvolvía al mismo punto."',
+    '"no entres en los túneles sin luz.\nno saldrás."',
+  ],
+  [ // Nivel 3 — Electrical Station
+    '"alta tensión. no toques nada."',
+    '"las luces parpadean en morse.\ndice: CORRE."',
+    '"el generador lleva semanas activo.\nnadie lo encendió."',
+    '"siempre hay electricidad.\nnunca hay personas."',
+    '"si lees esto ya es tarde."',
+  ],
+];
+let usedLoreIndices = new Set();
+
+function showLore(level) {
+  const texts = LEVEL_LORE[Math.min(level, LEVEL_LORE.length - 1)];
+  const available = texts.map((_, i) => i).filter(i => !usedLoreIndices.has(i));
+  if (available.length === 0) return;
+  const idx = available[Math.floor(Math.random() * available.length)];
+  usedLoreIndices.add(idx);
+  const el = document.getElementById('loreText');
+  if (!el) return;
+  el.textContent = texts[idx];
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4500);
+}
+
 // Audio
 let walkingSound, buzzingSound, glitchSound, deathSound, winSound;
 let audioListener = null;
@@ -218,6 +262,7 @@ async function init() {
   sanity = 100;
   entityNearby = inBlackout = false;
   entities = [];
+  usedLoreIndices = new Set();
   const cfg = LEVEL_CONFIGS[currentLevel];
   spawnCooldowns = { ...cfg.initCooldowns };
   moveForward = moveBackward = moveLeft = moveRight = isSprinting = false;
@@ -693,6 +738,7 @@ function updatePages() {
       pageMeshes.splice(i, 1);
       pagesCollected++;
       updatePageCounter();
+      showLore(currentLevel);
 
       if (pagesCollected >= LEVEL_CONFIGS[currentLevel].pagesNeeded) {
         spawnExit();
@@ -718,38 +764,53 @@ function updatePageCounter() {
 function updatePageCompass() {
   const compass = document.getElementById('pageCompass');
   const arrow   = document.getElementById('pageCompassArrow');
+  const label   = document.getElementById('pageCompassLabel');
   if (!compass || !arrow || !gameActive) return;
 
-  if (pageMeshes.length === 0 || exitMesh) {
-    compass.classList.remove('show');
-    return;
+  // Determine target: exit takes priority once spawned, otherwise nearest page
+  let target = null;
+  let pointingToExit = false;
+
+  if (exitMesh) {
+    target = exitMesh.position;
+    pointingToExit = true;
+  } else {
+    const pp = controls.object.position;
+    let nearestDist = Infinity;
+    for (const p of pageMeshes) {
+      const d = pp.distanceTo(p.position);
+      if (d < nearestDist) { nearestDist = d; target = p.position; }
+    }
   }
 
-  // Find nearest page
+  if (!target) { compass.classList.remove('show'); return; }
+
   const pp = controls.object.position;
-  let nearest = null, nearestDist = Infinity;
-  for (const p of pageMeshes) {
-    const d = pp.distanceTo(p.position);
-    if (d < nearestDist) { nearestDist = d; nearest = p; }
-  }
-  if (!nearest) { compass.classList.remove('show'); return; }
-
-  // Compute angle from camera forward to page (horizontal only)
   const camDir = new THREE.Vector3();
   camera.getWorldDirection(camDir);
   camDir.y = 0; camDir.normalize();
 
-  const toPage = nearest.position.clone().sub(pp);
-  toPage.y = 0; toPage.normalize();
+  const toTarget = target.clone().sub(pp);
+  toTarget.y = 0; toTarget.normalize();
 
-  // Angle between camera forward and direction to page
   const angle = Math.atan2(
-    camDir.x * toPage.z - camDir.z * toPage.x,  // cross product z
-    camDir.x * toPage.x + camDir.z * toPage.z   // dot product
+    camDir.x * toTarget.z - camDir.z * toTarget.x,
+    camDir.x * toTarget.x + camDir.z * toTarget.z
   );
 
   compass.classList.add('show');
   arrow.style.transform = `rotate(${angle}rad)`;
+
+  // Green tint when pointing to exit, white when pointing to pages
+  if (pointingToExit) {
+    arrow.style.filter = 'drop-shadow(0 0 5px rgba(0,255,136,0.9))';
+    if (label) label.textContent = 'salida';
+    compass.style.borderColor = 'rgba(0,255,136,0.3)';
+  } else {
+    arrow.style.filter = 'drop-shadow(0 0 4px rgba(255,255,255,0.6))';
+    if (label) label.textContent = 'página';
+    compass.style.borderColor = '';
+  }
 }
 
 // ─── Exit ─────────────────────────────────────────────────────────────────────

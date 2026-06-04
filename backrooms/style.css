@@ -401,6 +401,28 @@ input[type="range"]::-moz-range-track {
   animation: winFade 5s ease-in forwards;
 }
 
+/* ── Lore text overlay ── */
+#loreText {
+  position: fixed;
+  bottom: 5em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: rgba(200, 184, 122, 0.9);
+  letter-spacing: 0.08em;
+  text-align: center;
+  white-space: pre-line;
+  line-height: 1.7;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  text-shadow: 0 0 12px rgba(200, 160, 40, 0.4);
+  max-width: 340px;
+}
+#loreText.show { opacity: 1; }
+
 /* ── FPS counter ── */
 #fpsCounter {
   position: fixed;
