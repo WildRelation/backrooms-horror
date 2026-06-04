@@ -568,9 +568,31 @@ function updateRoomLights(delta, time) {
       light.position.set(rp.x, 3.5, rp.z);
     }
     st.stutterTimer  -= delta;
-    st.blackoutTimer -= delta;
     if (st.stutterTimer  <= 0) { st.stutterActive = true;  st.stutterDuration = rand(0.05,0.25); st.stutterTimer  = rand(2,10); }
-    if (st.blackoutTimer <= 0) { st.blackoutActive = true;  st.blackoutDuration = rand(0.3,1.4);  st.blackoutTimer = rand(15,50); }
+
+    // Blackouts scale with fear — disabled above 50% sanity
+    const fear = 1 - sanity / 100;
+    if (fear > 0.5) {
+      // Below 50% sanity: frequent short blackouts
+      st.blackoutTimer -= delta;
+      if (st.blackoutTimer <= 0) {
+        st.blackoutActive   = true;
+        st.blackoutDuration = rand(0.2, 0.8) + fear * 0.8;
+        st.blackoutTimer    = rand(8, 20) * (1 - fear * 0.6);
+      }
+    } else if (fear > 0.25) {
+      // 25–50% fear: occasional blackouts
+      st.blackoutTimer -= delta;
+      if (st.blackoutTimer <= 0) {
+        st.blackoutActive   = true;
+        st.blackoutDuration = rand(0.2, 0.6);
+        st.blackoutTimer    = rand(20, 45);
+      }
+    } else {
+      // Below 25% fear: no blackouts, reset timer
+      st.blackoutActive = false;
+      st.blackoutTimer  = rand(10, 20);
+    }
 
     if (st.blackoutActive) {
       st.blackoutDuration -= delta; light.intensity = 0; anyBlackout = true;
