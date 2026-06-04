@@ -142,7 +142,7 @@ let sanity;
 const SANITY_DRAIN_STILL  = 5;    // /s standing still
 const SANITY_DRAIN_SPRINT = 3;    // /s while sprinting (no recovery when sprinting)
 const SANITY_DRAIN_DARK   = 6;    // /s during blackout
-const SANITY_RECOVER      = 5.0;  // /s only while walking (not sprinting, not still)
+const SANITY_RECOVER      = 10.0;  // /s only while walking (not sprinting, not still)
 const SPRINT_MULTIPLIER   = 1.9;
 
 // Level
