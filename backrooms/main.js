@@ -221,7 +221,7 @@ function showLore(level) {
 }
 
 // Audio
-let walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, deathSound, winSound;
+let walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, stepsDevSound, deathSound, winSound;
 let audioListener = null;
 let audioLoader;
 let animFrameId = null;
@@ -273,7 +273,7 @@ async function init() {
   }
 
   // Stop all sounds from previous session
-  [walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, deathSound, winSound]
+  [walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, stepsDevSound, deathSound, winSound]
     .forEach(s => { try { if (s?.isPlaying) s.stop(); } catch(_) {} });
   // Reset buzzing — will restart after next pointer lock
 
@@ -520,6 +520,10 @@ function initAudio() {
   });
   audioLoader.load('./sounds/win.mp3', buf => {
     winSound.setBuffer(buf); winSound.setLoop(false); winSound.setVolume(0.6);
+  });
+  stepsDevSound = new THREE.Audio(listener);
+  audioLoader.load('./sounds/steps_devorador.mp3', buf => {
+    stepsDevSound.setBuffer(buf); stepsDevSound.setLoop(true); stepsDevSound.setVolume(0);
   });
 }
 
@@ -1056,6 +1060,7 @@ function deactivateEntity(ent) {
   ent.sprite.position.copy(limbo);
   ent.wasWatched = false;
   spawnCooldowns[ent.def.id] = ent.def.spawnCooldown;
+  if (ent.def.id === 'devorador' && stepsDevSound?.isPlaying) stepsDevSound.stop();
 }
 
 function spawnEntityAt(ent, roomIdx) {
@@ -1206,6 +1211,21 @@ function updateDevorador(ent, delta) {
     const intensity = (1 - dist / 8) * 0.012;
     controls.object.rotation.x += (Math.random() - 0.5) * intensity;
     controls.object.rotation.z += (Math.random() - 0.5) * intensity;
+  }
+
+  // Steps sound — volume by distance, playback rate by speed
+  if (stepsDevSound?.buffer) {
+    if (dist < 30) {
+      const vol = clamp((1 - dist / 30) * 0.55, 0, 0.55);
+      stepsDevSound.setVolume(vol);
+      // Speed up playback rate proportionally to entity speed vs base
+      const ecfg = LEVEL_CONFIGS[currentLevel];
+      const normalizedSpeed = speed / (ecfg.speedBase + ecfg.speedFear);
+      stepsDevSound.setPlaybackRate(clamp(0.8 + normalizedSpeed * 1.2, 0.8, 2.2));
+      if (!stepsDevSound.isPlaying) stepsDevSound.play();
+    } else {
+      if (stepsDevSound.isPlaying) stepsDevSound.stop();
+    }
   }
 }
 
