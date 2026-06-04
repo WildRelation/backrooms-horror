@@ -220,7 +220,7 @@ function showLore(level) {
 }
 
 // Audio
-let walkingSound, buzzingSound, glitchSound, deathSound, winSound;
+let walkingSound, buzzingSound, glitchSound, coughSound, deathSound, winSound;
 let audioListener = null;
 let audioLoader;
 let animFrameId = null;
@@ -266,7 +266,7 @@ async function init() {
   }
 
   // Stop all sounds from previous session
-  [walkingSound, buzzingSound, glitchSound, deathSound, winSound]
+  [walkingSound, buzzingSound, glitchSound, coughSound, deathSound, winSound]
     .forEach(s => { try { if (s?.isPlaying) s.stop(); } catch(_) {} });
   // Reset buzzing — will restart after next pointer lock
 
@@ -482,6 +482,10 @@ function initAudio() {
     lpf.type = 'lowpass';
     lpf.frequency.value = 1400;
     glitchSound.setFilter(lpf);
+  });
+  coughSound = new THREE.Audio(listener);
+  audioLoader.load('./sounds/cough.mp3', buf => {
+    coughSound.setBuffer(buf); coughSound.setLoop(false); coughSound.setVolume(0.35);
   });
   audioLoader.load('./sounds/death.mp3', buf => {
     deathSound.setBuffer(buf); deathSound.setLoop(false); deathSound.setVolume(0.6);
@@ -961,10 +965,6 @@ function deactivateEntity(ent) {
   ent.sprite.position.copy(limbo);
   ent.wasWatched = false;
   spawnCooldowns[ent.def.id] = ent.def.spawnCooldown;
-  // Stop chase sound when entity leaves the map
-  if (ent.def.id === 'devorador' || ent.def.id === 'vigilante') {
-    if (glitchSound?.isPlaying) glitchSound.stop();
-  }
 }
 
 function spawnEntityAt(ent, roomIdx) {
@@ -1000,16 +1000,11 @@ function updateVigilante(ent, delta) {
   const dist    = camera.position.distanceTo(ent.sprite.position);
 
   if (looking) {
-    // Flicker while being watched
     ent.sprite.material.opacity = 0.7 + Math.sin(performance.now() * 0.015) * 0.3;
-    if (!glitchSound.isPlaying) glitchSound.play();
     ent.wasWatched = true;
   } else {
     ent.sprite.material.opacity = 1;
-    if (glitchSound.isPlaying) glitchSound.stop();
-
     if (ent.wasWatched && dist > 3) {
-      // Just looked away — teleport closer
       const dir  = camera.position.clone().sub(ent.sprite.position).normalize();
       const jump = Math.min(dist * 0.45, 7);
       ent.sprite.position.addScaledVector(dir, jump);
@@ -1045,19 +1040,14 @@ function updateDevorador(ent, delta) {
   const canSee = ent._losCache;
 
   if (canSee) {
-    // Full chase — move directly toward player
     ent.lastKnownPos = pp.clone();
     ent.lostSightTimer = 0;
     const dir = pp.clone().sub(ent.sprite.position);
     dir.y = 0; dir.normalize();
     ent.sprite.position.addScaledVector(dir, speed * delta);
-    if (!glitchSound.isPlaying) glitchSound.play();
   } else {
-    if (glitchSound.isPlaying) glitchSound.stop();
     ent.lostSightTimer = (ent.lostSightTimer ?? 0) + delta;
-
     if (ent.lastKnownPos && ent.lostSightTimer < 4) {
-      // Move toward last known position at half speed
       const dir = ent.lastKnownPos.clone().sub(ent.sprite.position);
       dir.y = 0;
       if (dir.length() > 0.5) {
@@ -1065,27 +1055,20 @@ function updateDevorador(ent, delta) {
         ent.sprite.position.addScaledVector(dir, speed * 0.5 * delta);
       }
     }
-    // After 4s without sight: give up and wander
   }
 
   ent.sprite.position.y = ent.def.centerY;
-
-  // Still show glitch when very close regardless of LOS
-  if (dist < 3 && !glitchSound.isPlaying) glitchSound.play();
 }
 
-// El Perdido — wanders randomly, attacks on touch
+// El Perdido — wanders between room spawn points, attacks on touch
 function updatePerdido(ent, delta) {
   ent.wanderTimer -= delta;
   if (ent.wanderTimer <= 0) {
-    // Pick new wander direction
-    const angle = Math.random() * Math.PI * 2;
-    const radius = rand(3, 10);
-    ent.wanderTarget.set(
-      ent.sprite.position.x + Math.cos(angle) * radius,
-      ent.def.centerY,
-      ent.sprite.position.z + Math.sin(angle) * radius
-    );
+    // Use a room Spawn point as target — guaranteed open position, no wall clipping
+    const roomIdx = Math.floor(Math.random() * currentRooms.length);
+    const spawnPos = currentRooms[roomIdx].scene.getObjectByName('Spawn')
+      .localToWorld(new THREE.Vector3());
+    ent.wanderTarget.set(spawnPos.x, ent.def.centerY, spawnPos.z);
     ent.wanderTimer = rand(3, 8);
   }
   const toTarget = ent.wanderTarget.clone().sub(ent.sprite.position);
@@ -1094,27 +1077,38 @@ function updatePerdido(ent, delta) {
     toTarget.normalize();
     ent.sprite.position.addScaledVector(toTarget, 1.2 * delta);
   }
+
+  // Proximity cough — audible warning when close
+  const dist = controls.object.position.distanceTo(ent.sprite.position);
+  ent.coughTimer = (ent.coughTimer ?? 0) - delta;
+  if (dist < 9 && ent.coughTimer <= 0 && coughSound?.buffer && !coughSound.isPlaying) {
+    coughSound.play();
+    ent.coughTimer = rand(4, 8);
+  }
 }
 
 function updateEntities(delta) {
-  // Tick spawn cooldowns
   for (const id in spawnCooldowns) spawnCooldowns[id] = Math.max(0, spawnCooldowns[id] - delta);
 
   for (const ent of entities) {
     if (!ent.active) continue;
-
-    // Remove if walked out of loaded area
-    if (isOutOfBounds(ent.sprite.position)) {
-      deactivateEntity(ent);
-      continue;
-    }
-
+    if (isOutOfBounds(ent.sprite.position)) { deactivateEntity(ent); continue; }
     switch (ent.def.id) {
       case 'vigilante': updateVigilante(ent, delta); break;
       case 'devorador': updateDevorador(ent, delta); break;
       case 'perdido':   updatePerdido(ent, delta);   break;
     }
   }
+
+  // Central glitch sound control — Devorador (chase) takes priority over Vigilante (watched)
+  const pp = controls.object.position;
+  const devActive = entities.some(e => e.active && e.def.id === 'devorador' &&
+    (e._losCache || pp.distanceTo(e.sprite.position) < 3));
+  const vigWatched = !devActive && entities.some(e => e.active && e.def.id === 'vigilante' &&
+    isLookingAt(e.sprite.position));
+  const wantGlitch = devActive || vigWatched;
+  if (wantGlitch && glitchSound?.buffer && !glitchSound.isPlaying) glitchSound.play();
+  if (!wantGlitch && glitchSound?.isPlaying) glitchSound.stop();
 }
 
 function checkEntityKills() {
