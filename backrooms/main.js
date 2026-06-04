@@ -56,17 +56,17 @@ const LEVEL_CONFIGS = [
   },
   {
     name:        'Nivel 3 — Electrical Station',
-    fogColor:    0x1a0000, fogNear: 2,  fogFar: 7,
+    fogColor:    0x1a0000, fogNear: 4,  fogFar: 14,
     bgColor:     0x050000,
     ambientColor:0x0a0000,
     lightColor:  0xff2200, lightMin: 6,  lightMax: 11,
     tint:        'rgba(80, 0, 0, 0.30)',               // red emergency tint
     pagesNeeded: 6,
     maxEntities: 3,
-    speedBase:   5.5, speedFear: 7.0,
-    drainIdle:   4.0, drainEntity: 25,
+    speedBase:   4.5, speedFear: 5.5,
+    drainIdle:   2.5, drainEntity: 18,
     cooldowns:   { vigilante: 14, devorador: 10, perdido: 18 },
-    initCooldowns:{ vigilante: 4,  devorador: 3,  perdido: 6  },
+    initCooldowns:{ vigilante: 4,  devorador: 8,  perdido: 6  },
   },
 ];
 
