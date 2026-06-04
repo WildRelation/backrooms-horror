@@ -1209,26 +1209,41 @@ function updateDevorador(ent, delta) {
   }
 }
 
-// El Perdido — wanders between room spawn points, attacks on touch
+// El Perdido — wanders randomly, stalks player when nearby
 function updatePerdido(ent, delta) {
-  ent.wanderTimer -= delta;
-  if (ent.wanderTimer <= 0) {
-    // Use a room Spawn point as target — guaranteed open position, no wall clipping
-    const roomIdx = Math.floor(Math.random() * currentRooms.length);
-    const spawnPos = currentRooms[roomIdx].scene.getObjectByName('Spawn')
-      .localToWorld(new THREE.Vector3());
-    ent.wanderTarget.set(spawnPos.x, ent.def.centerY, spawnPos.z);
-    ent.wanderTimer = rand(3, 8);
-  }
-  const toTarget = ent.wanderTarget.clone().sub(ent.sprite.position);
-  toTarget.y = 0;
-  if (toTarget.length() > 0.5) {
-    toTarget.normalize();
-    ent.sprite.position.addScaledVector(toTarget, 1.2 * delta);
+  const pp   = controls.object.position;
+  const dist = pp.distanceTo(ent.sprite.position);
+
+  if (dist < 12) {
+    // Stalk — slow walk toward player, no wander target override
+    const dir = pp.clone().sub(ent.sprite.position);
+    dir.y = 0;
+    if (dir.length() > 0.5) {
+      dir.normalize();
+      ent.sprite.position.addScaledVector(dir, 0.9 * delta);
+    }
+    ent.wanderTimer = rand(3, 6); // reset so it doesn't immediately pick a new target when out of range
+  } else {
+    // Wander between room spawn points
+    ent.wanderTimer -= delta;
+    if (ent.wanderTimer <= 0) {
+      const roomIdx = Math.floor(Math.random() * currentRooms.length);
+      const spawnPos = currentRooms[roomIdx].scene.getObjectByName('Spawn')
+        .localToWorld(new THREE.Vector3());
+      ent.wanderTarget.set(spawnPos.x, ent.def.centerY, spawnPos.z);
+      ent.wanderTimer = rand(3, 8);
+    }
+    const toTarget = ent.wanderTarget.clone().sub(ent.sprite.position);
+    toTarget.y = 0;
+    if (toTarget.length() > 0.5) {
+      toTarget.normalize();
+      ent.sprite.position.addScaledVector(toTarget, 1.2 * delta);
+    }
   }
 
+  ent.sprite.position.y = ent.def.centerY;
+
   // Proximity cough — audible warning when close
-  const dist = controls.object.position.distanceTo(ent.sprite.position);
   ent.coughTimer = (ent.coughTimer ?? 0) - delta;
   if (dist < 9 && ent.coughTimer <= 0 && coughSound?.buffer && !coughSound.isPlaying) {
     coughSound.play();
@@ -1259,6 +1274,15 @@ function updateEntities(delta) {
   const wantGlitch = (devChasing && !devSilent) || vigWatched;
   if (wantGlitch && glitchSound?.buffer && !glitchSound.isPlaying) glitchSound.play();
   if (!wantGlitch && glitchSound?.isPlaying) glitchSound.stop();
+
+  // Ambient buzzing cuts out when any entity enters the same room (~25 units)
+  // The sudden silence signals danger before the player sees anything
+  const entityVeryClose = entities.some(e => e.active && pp.distanceTo(e.sprite.position) < 25);
+  if (buzzingSound?.isPlaying) {
+    const targetVol = entityVeryClose ? 0 : 0.04;
+    if (Math.abs(buzzingSound.getVolume() - targetVol) > 0.001)
+      buzzingSound.setVolume(buzzingSound.getVolume() + (targetVol - buzzingSound.getVolume()) * 0.05);
+  }
 }
 
 function checkEntityKills() {
