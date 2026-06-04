@@ -496,7 +496,7 @@ function initAudio() {
     walkingSound.setBuffer(buf); walkingSound.setLoop(true); walkingSound.setVolume(0.3);
   });
   audioLoader.load('./sounds/buzzing.mp3', buf => {
-    buzzingSound.setBuffer(buf); buzzingSound.setLoop(true); buzzingSound.setVolume(0.12);
+    buzzingSound.setBuffer(buf); buzzingSound.setLoop(true); buzzingSound.setVolume(0.22);
     // Play only after user gesture — browsers block audio before interaction
   });
   audioLoader.load('./sounds/glitch.mp3', buf => {
@@ -1299,7 +1299,7 @@ function updateEntities(delta) {
   // The sudden silence signals danger before the player sees anything
   const entityVeryClose = entities.some(e => e.active && pp.distanceTo(e.sprite.position) < 25);
   if (buzzingSound?.isPlaying) {
-    const targetVol = entityVeryClose ? 0 : 0.12;
+    const targetVol = entityVeryClose ? 0 : 0.22;
     if (Math.abs(buzzingSound.getVolume() - targetVol) > 0.001)
       buzzingSound.setVolume(buzzingSound.getVolume() + (targetVol - buzzingSound.getVolume()) * 0.05);
   }
