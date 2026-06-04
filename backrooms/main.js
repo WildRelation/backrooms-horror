@@ -90,7 +90,7 @@ const ENTITY_DEFS = [
     centerY: 1.65,             // face/torso — center at eye level
     killDist: 1.2,
     deathMsg: 'Fuiste devorado.',
-    darkBg: false,
+    darkBg: true,
     spawnCooldown: 20,
   },
   {
@@ -238,17 +238,22 @@ let startTime;
 let deathMessage   = '';
 
 // DOM
-const introScreen  = document.getElementById('introScreen');
-const vignette     = document.getElementById('vignette');
-const chromaticA   = document.getElementById('chromaticA');
-const chromaticB   = document.getElementById('chromaticB');
-const noiseOverlay = document.getElementById('noiseOverlay');
-const colorScreen  = document.getElementById('colorScreen');
-const endMessage   = document.getElementById('endMessage');
-const menuEl       = document.getElementById('menu');
-const timeEl       = document.getElementById('time');
-const timerHint    = document.getElementById('timerHint');
-const crosshairEl  = document.getElementById('crosshair');
+const introScreen     = document.getElementById('introScreen');
+const vignette        = document.getElementById('vignette');
+const chromaticA      = document.getElementById('chromaticA');
+const chromaticB      = document.getElementById('chromaticB');
+const noiseOverlay    = document.getElementById('noiseOverlay');
+const colorScreen     = document.getElementById('colorScreen');
+const endMessage      = document.getElementById('endMessage');
+const menuEl          = document.getElementById('menu');
+const timeEl          = document.getElementById('time');
+const timerHint       = document.getElementById('timerHint');
+const crosshairEl     = document.getElementById('crosshair');
+const sanityBarEl     = document.getElementById('sanityBar');
+const sanityFillEl    = document.getElementById('sanityFill');
+const levelIndicator  = document.getElementById('levelIndicator');
+const pauseOverlay    = document.getElementById('pauseOverlay');
+const menuLevelEl     = document.getElementById('menuLevel');
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -292,7 +297,17 @@ async function init() {
   colorScreen.className = '';
   endMessage.style.display = 'none';
   menuEl.style.display = 'none';
+  pauseOverlay.classList.remove('show');
+  sanityBarEl.classList.remove('show');
+  levelIndicator.classList.remove('show');
   crosshairEl.classList.remove('hidden');
+
+  // Update intro objective text with correct page count for this level
+  const introObj = document.getElementById('introObjective');
+  if (introObj) {
+    const n = LEVEL_CONFIGS[currentLevel].pagesNeeded;
+    introObj.textContent = `Recoge ${n} página${n > 1 ? 's' : ''} esparcidas por el mapa. Luego aparecerá la salida.`;
+  }
   resetSanityFX();
   // Reset page counter
   const pageCounter = document.getElementById('pageCounter');
@@ -432,7 +447,9 @@ function onControlsLock() {
   if (!startTime) startTime = performance.now();
   gameActive = playerMovement = true;
   timerHint.classList.remove('show');
-  // Start ambient buzzing now that we have a user gesture
+  pauseOverlay.classList.remove('show');
+  sanityBarEl.classList.add('show');
+  levelIndicator.classList.add('show');
   if (buzzingSound.buffer && !buzzingSound.isPlaying) buzzingSound.play();
   if (pagesCollected === 0) {
     const cfg = LEVEL_CONFIGS[currentLevel];
@@ -443,7 +460,10 @@ function onControlsLock() {
 function onControlsUnlock() {
   if (!gameLost && !gameWon) {
     playerMovement = false;
-    if (gameActive) showHint('haz clic para continuar', 99999); // stays until re-locked
+    if (gameActive) {
+      pauseOverlay.classList.add('show');
+      timerHint.classList.remove('show');
+    }
   }
 }
 
@@ -930,6 +950,16 @@ function applySanityFX() {
   if (fear > 0.7 && Math.random() < 0.02) {
     controls.object.rotation.z += (Math.random() - 0.5) * 0.015 * fear;
   }
+
+  // Sanity bar — color shifts from gold → red as fear rises
+  sanityFillEl.style.width = `${sanity.toFixed(1)}%`;
+  const r = Math.round(200 + fear * 55);
+  const g = Math.round(184 * (1 - fear));
+  const b = Math.round(122 * (1 - fear * 0.8));
+  sanityFillEl.style.background = `rgba(${r},${g},${b},0.8)`;
+
+  // Level indicator
+  levelIndicator.textContent = LEVEL_CONFIGS[currentLevel].name;
 }
 
 function resetSanityFX() {
@@ -1319,7 +1349,11 @@ async function triggerWin() {
 
 function showEndMenu() {
   const elapsed = (performance.now() - startTime) / 1000;
-  timeEl.textContent = `${Math.floor(elapsed/60)}m ${(elapsed%60).toFixed(1)}s`;
+  timeEl.textContent = `Tiempo: ${Math.floor(elapsed/60)}m ${(elapsed%60).toFixed(1)}s`;
+  menuLevelEl.textContent = LEVEL_CONFIGS[currentLevel].name;
+  sanityBarEl.classList.remove('show');
+  levelIndicator.classList.remove('show');
+  pauseOverlay.classList.remove('show');
   menuEl.style.display = 'flex';
   controls.unlock();
 }
@@ -1391,6 +1425,38 @@ document.getElementById('restart').addEventListener('click', async () => {
   menuEl.style.display = 'none';
   startTime = undefined;
   await init();
+});
+
+document.getElementById('menuMain').addEventListener('click', () => {
+  menuEl.style.display = 'none';
+  currentLevel = 0;
+  startTime = undefined;
+  introScreen.style.display = 'flex';
+  introScreen.style.opacity = '1';
+  introScreen.classList.remove('fade-out');
+  const n = LEVEL_CONFIGS[0].pagesNeeded;
+  const introObj = document.getElementById('introObjective');
+  if (introObj) introObj.textContent = `Recoge ${n} páginas esparcidas por el mapa. Luego aparecerá la salida.`;
+  introScreen.addEventListener('click', onIntroClick, { once: true });
+});
+
+document.getElementById('pauseResume').addEventListener('click', () => {
+  pauseOverlay.classList.remove('show');
+  controls.lock();
+});
+
+document.getElementById('pauseQuit').addEventListener('click', async () => {
+  pauseOverlay.classList.remove('show');
+  currentLevel = 0;
+  startTime = undefined;
+  gameLost = gameWon = false;
+  introScreen.style.display = 'flex';
+  introScreen.style.opacity = '1';
+  introScreen.classList.remove('fade-out');
+  const n = LEVEL_CONFIGS[0].pagesNeeded;
+  const introObj = document.getElementById('introObjective');
+  if (introObj) introObj.textContent = `Recoge ${n} páginas esparcidas por el mapa. Luego aparecerá la salida.`;
+  introScreen.addEventListener('click', onIntroClick, { once: true });
 });
 
 window.addEventListener('resize', () => {

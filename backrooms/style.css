@@ -460,3 +460,83 @@ canvas {
   position: fixed;
   inset: 0;
 }
+
+/* ── Sanity bar ── */
+#sanityBar {
+  position: fixed;
+  bottom: 1.4em;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#sanityBar.show { opacity: 1; }
+#sanityFill {
+  height: 100%;
+  width: 100%;
+  border-radius: 2px;
+  background: rgba(200, 184, 122, 0.7);
+  transition: width 0.3s ease, background 0.5s ease;
+}
+
+/* ── Level indicator ── */
+#levelIndicator {
+  position: fixed;
+  top: 1.2em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  color: rgba(200, 184, 122, 0.3);
+  pointer-events: none;
+  z-index: 15;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#levelIndicator.show { opacity: 1; }
+
+/* ── Menu level info ── */
+#menuLevel {
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  color: #7a6e50;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+/* ── Pause overlay ── */
+#pauseOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+}
+#pauseOverlay.show { display: flex; }
+#pauseBox {
+  background: #111008;
+  border: 1px solid #3a3320;
+  width: 280px;
+  padding: 2em 1.5em;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2em;
+  font-family: 'Courier New', monospace;
+  align-items: center;
+}
+#pauseTitle {
+  color: #c8b87a;
+  font-size: 1rem;
+  letter-spacing: 0.3em;
+  text-align: center;
+}

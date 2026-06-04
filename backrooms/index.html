@@ -20,7 +20,7 @@
           <div class="ctrl-row"><span class="key">MOUSE</span><span class="ctrl-desc">mirar alrededor</span></div>
           <div class="ctrl-row"><span class="key">SHIFT</span><span class="ctrl-desc">correr (drena cordura)</span></div>
           <div class="ctrl-row"><span class="key">ESC</span><span class="ctrl-desc">pausar / liberar cursor</span></div>
-          <div class="ctrl-objective">Recoge 5 páginas esparcidas por el mapa. Luego aparecerá la salida.</div>
+          <div class="ctrl-objective" id="introObjective">Recoge las páginas esparcidas por el mapa. Luego aparecerá la salida.</div>
           <div class="ctrl-objective" style="margin-top:0.3em; font-size:0.65rem;">Quedarte quieto te consume. Sigue moviéndote.</div>
           <div class="volume-row">
             <span class="key" style="min-width:80px;">VOLUMEN</span>
@@ -63,7 +63,9 @@
         <input type="range" id="volumeSliderMenu" min="0" max="1" step="0.01" value="0.7">
         <span id="volumeLabelMenu" style="color:#7a6e50;font-size:0.75rem;min-width:36px;">70%</span>
       </div>
-      <button class="menuButton" id="restart">Try Again</button>
+      <div id="menuLevel"></div>
+      <button class="menuButton" id="restart">Intentar de nuevo</button>
+      <button class="menuButton" id="menuMain">Menú principal</button>
     </div>
 
     <!-- Page counter -->
@@ -95,5 +97,27 @@
 
     <!-- FPS counter (top-left, subtle) -->
     <div id="fpsCounter"></div>
+
+    <!-- Sanity bar (bottom-center) -->
+    <div id="sanityBar">
+      <div id="sanityFill"></div>
+    </div>
+
+    <!-- Level indicator (top-center) -->
+    <div id="levelIndicator"></div>
+
+    <!-- Pause overlay -->
+    <div id="pauseOverlay">
+      <div id="pauseBox">
+        <div id="pauseTitle">PAUSADO</div>
+        <button class="menuButton" id="pauseResume">Continuar</button>
+        <div class="volume-row menu-volume">
+          <span style="color:#7a6e50;font-size:0.75rem;letter-spacing:0.1em;">VOLUMEN</span>
+          <input type="range" id="volumeSliderPause" min="0" max="1" step="0.01" value="0.7">
+          <span id="volumeLabelPause" style="color:#7a6e50;font-size:0.75rem;min-width:36px;">70%</span>
+        </div>
+        <button class="menuButton" id="pauseQuit">Salir al menú</button>
+      </div>
+    </div>
   </body>
 </html>
