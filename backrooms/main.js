@@ -222,6 +222,8 @@ function showLore(level) {
 
 // Audio
 let walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, stepsDevSound, deathSound, winSound;
+let jumpscareSound, staticVigilanteSound, ambientSounds = [];
+let ambientTimer = 0;
 let audioListener = null;
 let audioLoader;
 let animFrameId = null;
@@ -273,8 +275,10 @@ async function init() {
   }
 
   // Stop all sounds from previous session
-  [walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, stepsDevSound, deathSound, winSound]
+  [walkingSound, buzzingSound, glitchSound, coughSound, breathingSound, stepsDevSound,
+   jumpscareSound, staticVigilanteSound, ...ambientSounds, deathSound, winSound]
     .forEach(s => { try { if (s?.isPlaying) s.stop(); } catch(_) {} });
+  ambientTimer = 0;
   // Reset buzzing — will restart after next pointer lock
 
   document.querySelectorAll('canvas').forEach(c => c.remove());
@@ -525,6 +529,21 @@ function initAudio() {
   audioLoader.load('./sounds/steps_devorador.mp3', buf => {
     stepsDevSound.setBuffer(buf); stepsDevSound.setLoop(true); stepsDevSound.setVolume(0);
   });
+  jumpscareSound = new THREE.Audio(listener);
+  audioLoader.load('./sounds/jumpscare.mp3', buf => {
+    jumpscareSound.setBuffer(buf); jumpscareSound.setLoop(false); jumpscareSound.setVolume(0.9);
+  });
+  staticVigilanteSound = new THREE.Audio(listener);
+  audioLoader.load('./sounds/static_vigilante.mp3', buf => {
+    staticVigilanteSound.setBuffer(buf); staticVigilanteSound.setLoop(false); staticVigilanteSound.setVolume(0.5);
+  });
+  for (const file of ['ambient_1.mp3', 'ambient_2.mp3']) {
+    const snd = new THREE.Audio(listener);
+    audioLoader.load(`./sounds/${file}`, buf => {
+      snd.setBuffer(buf); snd.setLoop(false); snd.setVolume(0.3);
+    });
+    ambientSounds.push(snd);
+  }
 }
 
 function updateBreathing(fear) {
@@ -535,6 +554,26 @@ function updateBreathing(fear) {
     if (!breathingSound.isPlaying) breathingSound.play();
   } else {
     if (breathingSound.isPlaying) breathingSound.stop();
+  }
+}
+
+function updateAmbientSounds(delta) {
+  if (!gameActive || ambientSounds.length === 0) return;
+  ambientTimer -= delta;
+  if (ambientTimer <= 0) {
+    // Only play if no sound is currently playing and no entity is very close
+    const pp = controls.object.position;
+    const entityClose = entities.some(e => e.active && pp.distanceTo(e.sprite.position) < 20);
+    const anyPlaying  = ambientSounds.some(s => s.isPlaying);
+    if (!entityClose && !anyPlaying) {
+      const candidates = ambientSounds.filter(s => s.buffer);
+      if (candidates.length > 0) {
+        const snd = candidates[Math.floor(Math.random() * candidates.length)];
+        snd.play();
+      }
+    }
+    // Next ambient sound in 25–60s
+    ambientTimer = rand(25, 60);
   }
 }
 
@@ -1135,6 +1174,7 @@ function updateVigilante(ent, delta) {
     ent.sprite.material.opacity = 1;
     if (ent.wasWatched && dist > 1.5) {
       spawnVigilanteAfterimage(ent.sprite.position.clone(), ent.sprite.material);
+      if (staticVigilanteSound?.buffer && !staticVigilanteSound.isPlaying) staticVigilanteSound.play();
 
       // Teleport to the Spawn of the room closest to the midpoint between
       // Vigilante and player — blocks the path between them
@@ -1496,6 +1536,7 @@ async function triggerDeath() {
   playerMovement = false;
   gameLost = true;
   glitchSound.stop();
+  if (jumpscareSound?.buffer) jumpscareSound.play();
   deathSound.play();
 
   vignette.style.transition = 'none';
@@ -1599,6 +1640,7 @@ function animate() {
     updateSanity(delta);
     applySanityFX();
     updateEntities(delta);
+    updateAmbientSounds(delta);
     // Throttle non-critical updates — run every N frames
     if (frameCount % 2 === 0) updatePages();
     if (frameCount % 4 === 0) { updatePageCompass(); updatePageRadar(); }
