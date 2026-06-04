@@ -694,8 +694,8 @@ function spawnPageAt(roomIdx) {
   page.position.set(rp.x + offsetX, 0.9, rp.z + offsetZ);
   page.rotation.y = Math.random() * Math.PI * 2;
 
-  // Strong white light — cuts through the fog
-  const pageLight = new THREE.PointLight(0xffffff, 22, 12);
+  // Strong white light — visible from across the room without compass
+  const pageLight = new THREE.PointLight(0xffffff, 22, 20);
   pageLight.position.set(0, 0, 0);
   page.add(pageLight);
 
@@ -787,23 +787,10 @@ function updatePageCompass() {
   const label   = document.getElementById('pageCompassLabel');
   if (!compass || !arrow || !gameActive) return;
 
-  // Determine target: exit takes priority once spawned, otherwise nearest page
-  let target = null;
-  let pointingToExit = false;
-
-  if (exitMesh) {
-    target = exitMesh.position;
-    pointingToExit = true;
-  } else {
-    const pp = controls.object.position;
-    let nearestDist = Infinity;
-    for (const p of pageMeshes) {
-      const d = pp.distanceTo(p.position);
-      if (d < nearestDist) { nearestDist = d; target = p.position; }
-    }
-  }
-
-  if (!target) { compass.classList.remove('show'); return; }
+  // Only show compass when pointing to exit — pages are meant to be explored for
+  if (!exitMesh) { compass.classList.remove('show'); return; }
+  const target = exitMesh.position;
+  const pointingToExit = true;
 
   const pp = controls.object.position;
   const camDir = new THREE.Vector3();
