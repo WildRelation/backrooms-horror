@@ -79,7 +79,7 @@ const ENTITY_DEFS = [
     w: 2.4, h: 2.4,           // face crop — enlarged so it fills corridor
     centerY: 1.65,             // float at eye level
     killDist: 1.8,
-    deathMsg: 'Él te encontró.',
+    deathMsg: 'warc.exe te encontró.',
     darkBg: true,
     spawnCooldown: 25,
   },
@@ -89,7 +89,7 @@ const ENTITY_DEFS = [
     w: 2.4, h: 2.4,
     centerY: 1.65,             // face/torso — center at eye level
     killDist: 1.2,
-    deathMsg: 'Fuiste devorado.',
+    deathMsg: 'El warcbubu te devoró.',
     darkBg: true,
     spawnCooldown: 20,
   },
@@ -99,7 +99,7 @@ const ENTITY_DEFS = [
     w: 1.7, h: 3.2,           // full body — stands on floor
     centerY: 1.6,              // h/2 ≈ floor to crown
     killDist: 0.7,
-    deathMsg: 'No estabas solo.',
+    deathMsg: 'Warc enano te alcanzó.',
     darkBg: false,
     spawnCooldown: 30,
   },
@@ -187,9 +187,9 @@ const LEVEL_LORE = [
     '"el agua huele a almendra.\nno la bebas."',
     '"hay camas aquí. usadas.\naún calientes."',
     '"vi a alguien. se parecía a warc.\npero algo estaba mal."',
-    '"warcbubu estuvo aquí.\nno sigas sus huellas."',
+    '"warc.exe estuvo aquí.\nno sigas sus huellas."',
     '"me dijo que jugaba illaoi.\nlos tentáculos no eran del juego."',
-    '"warcbubu no camina.\nflotar no debería ser posible aquí."',
+    '"warc.exe no camina.\nflotar no debería ser posible aquí."',
     '"dejó una nota: \'ejecutado\'.\nnada más. solo eso."',
   ],
   [ // Nivel 2 — Pipe Dreams
@@ -197,10 +197,10 @@ const LEVEL_LORE = [
     '"los conductos se mueven.\nlo escucho por las noches."',
     '"día 12. mi linterna murió.\nno estoy solo."',
     '"caminé durante horas.\nvolvía al mismo punto."',
-    '"no entres en los túneles sin luz.\nno saldrás."',
-    '"warcnigga controla este nivel.\nnunca lo mires a los ojos."',
+    '"no entres en los túneles sin luz.\nwarc negro te encontrará."',
+    '"el warcbubu controla este nivel.\nnunca lo mires a los ojos."',
     '"aquí warc es la R de illaoi.\ntú eres la copia."',
-    '"warcnigga me encontró.\ncorri tres horas. sigo corriendo."',
+    '"el warcbubu me encontró.\ncorrí tres horas. sigo corriendo."',
     '"la copia tiene más vida que el campeón.\naquí eso no es un chiste."',
   ],
   [ // Nivel 3 — Electrical Station
@@ -212,7 +212,7 @@ const LEVEL_LORE = [
     '"warc enano vive en los conductos.\nlo escucho reírse."',
     '"warc enano es pequeño.\npero es más rápido que tú."',
     '"ejecutado. siempre ejecutado.\nla copia tiene más vida que el campeón."',
-    '"los tres están aquí: warcbubu, warcnigga, warc enano.\nno puedes esquivarlos a todos."',
+    '"los cuatro están aquí: warc.exe, el warcbubu, warc enano, warc negro.\nno puedes esquivarlos a todos."',
     '"warc era un streamer de lol.\nahora es esto.\ntú serás lo siguiente."',
   ],
 ];
