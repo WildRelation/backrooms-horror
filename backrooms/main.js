@@ -1105,8 +1105,8 @@ function spawnVigilanteAfterimage(pos, material) {
 }
 
 function updateVigilante(ent, delta) {
-  const looking = isLookingAt(ent.sprite.position);
   const dist    = camera.position.distanceTo(ent.sprite.position);
+  const looking = isLookingAt(ent.sprite.position) && hasLineOfSight(camera.position, ent.sprite.position);
 
   if (looking) {
     ent.sprite.material.opacity = 0.7 + Math.sin(performance.now() * 0.015) * 0.3;
