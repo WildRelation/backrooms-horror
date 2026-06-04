@@ -476,7 +476,7 @@ canvas {
 /* ── Sanity bar ── */
 #sanityBar {
   position: fixed;
-  bottom: 1.6em;
+  bottom: 0.7em;
   left: 50%;
   transform: translateX(-50%);
   width: 160px;
