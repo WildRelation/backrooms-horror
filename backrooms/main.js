@@ -234,6 +234,7 @@ let frameCount  = 0;
 
 // Game state
 let gameActive     = false;
+let gamePaused     = false;
 let gameLost       = false;
 let gameWon        = false;
 let playerMovement = false;
@@ -284,7 +285,7 @@ async function init() {
   document.querySelectorAll('canvas').forEach(c => c.remove());
   if (renderer) renderer.dispose();
 
-  gameLost = gameWon = false;
+  gameLost = gameWon = gamePaused = false;
   gameActive = playerMovement = false;
   frameCount = 0;
   pagesCollected = 0;
@@ -454,8 +455,11 @@ function onCanvasClick() {
 function onControlsLock() {
   if (!startTime) startTime = performance.now();
   gameActive = playerMovement = true;
+  gamePaused = false;
   timerHint.classList.remove('show');
   pauseOverlay.classList.remove('show');
+  if (buzzingSound?.buffer && !buzzingSound.isPlaying) buzzingSound.play();
+  buzzingSound?.setVolume(0.22);
   sanityBarEl.classList.add('show');
   levelIndicator.classList.add('show');
   if (buzzingSound.buffer && !buzzingSound.isPlaying) buzzingSound.play();
@@ -469,8 +473,10 @@ function onControlsUnlock() {
   if (!gameLost && !gameWon) {
     playerMovement = false;
     if (gameActive) {
+      gamePaused = true;
       pauseOverlay.classList.add('show');
       timerHint.classList.remove('show');
+      if (buzzingSound?.isPlaying) buzzingSound.setVolume(0);
     }
   }
 }
@@ -1632,7 +1638,7 @@ function animate() {
   // Build BVH one geometry per frame — eliminates stutter from lazy computation
   if (bvhQueue.length > 0) bvhQueue.shift().computeBoundsTree();
 
-  if (!gameLost && !gameWon) {
+  if (!gameLost && !gameWon && !gamePaused) {
     collisionDetection();
     checkRoomChange(controls);
     playerMesh.position.copy(controls.object.position);
