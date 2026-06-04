@@ -8,9 +8,9 @@ No backend — 100% static site.
 
 ## Tech stack
 
-- **Three.js 0.157** — 3D rendering, GLTFLoader, PointerLockControls, Web Audio API
+- **Three.js 0.157** — 3D rendering, GLTFLoader + DRACOLoader, PointerLockControls, Web Audio API
 - **Vite 4** — bundler, dev server (`cd backrooms && npm run dev`)
-- **Source**: `backrooms/` — `main.js` is the entire game (~1200 lines)
+- **Source**: `backrooms/` — `main.js` is the entire game (~1450 lines)
 - **Assets**: `backrooms/public/` — models, sounds, images (Vite copies these to `dist/` on build)
 - **Blender sources**: `assets/Blend/` and `assets/Archimesh/` (.blend files)
 - **Docker**: nginx serves `backrooms/dist/` — see `Dockerfile` and `nginx.conf.template`
@@ -22,75 +22,94 @@ No backend — 100% static site.
 | `https://wildrelation.github.io/backrooms-horror/` | GitHub Pages (Fastly CDN) | push to main |
 | `https://the-warcrooms.app.cloud.cbh.kth.se` | KTH Cloud (Sweden) | push to main |
 
-Both deploy automatically via GitHub Actions on push to `main`:
-- `.github/workflows/pages.yml` — builds `backrooms/` and deploys dist to Pages
-- `.github/workflows/docker.yml` — builds Docker image, pushes to `ghcr.io/wildrelation/backrooms-horror`
-
-**GitHub Pages is preferred** for accessibility — it's on a global CDN. KTH Cloud is
-in Sweden which is slow for users in Latin America.
+Both deploy automatically via GitHub Actions on push to `main`.
+**GitHub Pages is preferred** — global CDN, faster for Latin America.
 
 ## Game architecture
 
 ### Rooms
 - 12 GLB room models (`backrooms/public/models/room1.glb` … `room12.glb`)
+- **Compressed**: Draco geometry + WebP textures 1024px → ~700KB each (was ~20MB)
+- **Draco decoders** in `backrooms/public/draco/` — required by `DRACOLoader`
 - Arranged in a 3×3 grid (`currentRooms[9]`). When player exits the grid, 3 rooms
   swap in from `unusedRooms` — infinite world effect
-- **Rooms 1–9** load at startup (counter shows 0/9). **Rooms 10–12** load in
-  background after game starts via `loadReserveRooms()` — reduces CPU pressure
-- Each room has a named `Spawn` object (Three.js getObjectByName) used as placement
-  anchor for pages and entities
+- **Rooms 1–9** load at startup. **Rooms 10–12** load in background via `loadReserveRooms()`
+- Each room has a named `Spawn` object used as placement anchor for pages and entities
 
 ### Entities
-- **El Vigilante** — freezes when player looks at it, approaches from behind
-- **El Devorador** — chases player; speed = `speedBase + fear * speedFear`
-- **El Perdido** — wanders randomly, kill on proximity
-- `fear = 1 - sanity / 100` — sanity drains when idle or near entities
+- **El Vigilante** — freezes when player looks at it (flickers), teleports closer when you look away
+- **El Devorador** — chases player via line-of-sight; speed = `speedBase + fear * speedFear`; uses `darkBg: true` (AdditiveBlending) to remove white background
+- **El Perdido** — wanders between room Spawn points (NOT random positions — avoids wall clipping); plays `cough.mp3` when player is within 9 units
+- `fear = 1 - sanity / 100` — controls Devorador speed and visual FX intensity
+- **Glitch sound** controlled centrally in `updateEntities()`: Devorador chase takes priority over Vigilante being watched
 
-### Player speeds (after physics fix)
-- Walk: **4 u/s** (steady-state with `exp(-15*delta)` friction, force = 60)
+### Sanity system
+- Starts at 100, shown as bar bottom-center (gold → red as fear rises)
+- **Drains**: idle base (`drainIdle` per level) + standing still (+5/s) + sprinting (+3/s) + entities nearby (up to `drainEntity`/s) + blackout (+6/s)
+- **Recovers**: +2.5/s **only while walking** (not sprinting, not standing still)
+- **At 0**: triggers forced 4s blackout (`triggerSanityCollapse`)
+- Does NOT kill directly — consequences are max Devorador speed + visual distortion
+
+### Player speeds
+- Walk: **4 u/s** (`exp(-15*delta)` friction, force = 60)
 - Sprint: **7.6 u/s** (`SPRINT_MULTIPLIER = 1.9`)
-- Devorador base speeds: 2 / 3 / 4 / 5.5 u/s per level — player sprint should
-  always exceed base speed so the player CAN escape by turning corners
+- Devorador base speeds: 2 / 3 / 4 / 5.5 u/s per level
 
 ### Levels (0–3)
 Defined in `LEVEL_CONFIGS` array. Each level changes: fog color/density, entity
-spawn cooldowns, speed, sanity drain, pages needed, max entities.
+spawn cooldowns, speed, sanity drain, pages needed (3/4/5/6), max entities.
+
+### Blackouts
+- Random: every 30–70s (level 0) down to 10–28s (levels 2–3), duration 0.3–1.4s
+- Implementation: sets `light.intensity = 0` + `ambientLight.intensity = 0` + CSS `#blackoutOverlay` (z-index 8) covers canvas completely (pitch black)
+- Sanity bar (z-index 15) stays visible above blackout overlay
 
 ### Audio
-All sounds use `THREE.Audio` (Web Audio API). Volumes after last adjustment:
-- walking: 0.3, buzzing (ambient): 0.04, glitch (chase): 0.6, death: 0.6, win: 0.6
+All sounds in Spanish horror context. Current volumes:
+- `walking.mp3`: 0.3 (loop)
+- `buzzing.mp3`: 0.04 (ambient loop)
+- `glitch.mp3`: 0.22 + low-pass filter 1400Hz (chase tension)
+- `cough.mp3`: 0.35 (El Perdido proximity warning, cooldown 4–8s)
+- `death.mp3`: 0.6
+- `win.mp3`: 0.6
 
-Sounds load via `initAudio()` which runs before `await loadAssets()` — this means
-audio can play during the loading screen (keydown listener is active pre-load).
+### HUD elements
+- **Page counter** — top-right, dots (○●) showing collected/needed
+- **Page radar** — bottom-left, shows if a page is in current area
+- **Exit compass** — bottom-right, arrow pointing to exit (appears after all pages collected)
+- **Sanity bar** — bottom-center, 3px thin line, gold→red (KNOWN ISSUE: too thin/invisible)
+- **Level indicator** — top-center, current level name (hidden until game starts)
+- **Pause overlay** — ESC triggers real pause, shows "PAUSADO" with Continuar/Salir buttons
+- **Lore text** — appears center when collecting a page
+- **FPS counter** — top-left, subtle
 
 ## Known issues / decisions
 
-See GitHub Issues for full history. Summary:
-
 | Issue | Status | Notes |
 |-------|--------|-------|
-| Loading freeze (no progress) | Fixed | Progress counter + error message added |
+| Loading freeze (no progress) | Fixed | Progress counter + error message |
 | Stuck at 1/12 (CPU saturation) | Fixed | Lazy-load rooms 10–12 |
-| Framerate-dependent movement | Fixed | Use `Math.exp(-15*delta)` friction |
-| Pages spawning in walls | Fixed | Offset reduced ±3→±1.5, height 1.65→0.9 |
-| Audio too loud | Fixed | All volumes reduced ~40% |
-| Slow load for distant users | Partial | GitHub Pages helps; Draco compression pending |
+| Framerate-dependent movement | Fixed | `Math.exp(-15*delta)` friction |
+| Pages spawning in walls | Fixed | Offset reduced, height adjusted |
+| Audio too loud / harsh | Fixed | Volumes reduced, glitch has low-pass filter |
+| 228MB model download | Fixed | Draco+WebP compression → 8.6MB total |
+| El Perdido walking through walls | Fixed | Uses room Spawn points as wander targets |
+| Glitch sound conflict (2 entities) | Fixed | Centralized in `updateEntities()` |
+| Sanity not recovering when walking | Fixed | Recovery only applies while walking |
+| Blackout not fully black | Fixed | CSS overlay + ambientLight.intensity = 0 |
+| El Devorador white background | Fixed | `darkBg: true` → AdditiveBlending |
 
-## Potential improvements (not yet done)
-
-- **Nginx gzip for GLBs** — currently `gzip_types` only covers text/JS/CSS. Adding
-  `application/octet-stream` could help KTH Cloud delivery slightly.
-
-## Pendientes — bugs conocidos (verificados en sesión anterior)
-
-Estos tres problemas fueron identificados mediante prueba visual en el navegador y
-están listos para implementar en la próxima sesión:
+## Pendientes — bugs conocidos (verificados, listos para implementar)
 
 | # | Problema | Archivo | Detalle |
 |---|----------|---------|---------|
-| 1 | **Intro en inglés** | `index.html` | Las líneas del lore en la pantalla de inicio siguen en inglés: `"You have no-clipped out of reality."`, `"Estimated square footage: 600,000,000+"`, `"Entities present: unknown"`. Todo el juego debe estar en español. |
-| 2 | **Barra de cordura invisible** | `style.css` + `main.js` | El `#sanityBar` tiene solo 3px de alto y es casi imperceptible durante el juego. Necesita más presencia visual para que el jugador entienda su estado de cordura. |
-| 3 | **"INTENTAR DE NUEVO" rompe en dos líneas** | `style.css` | El texto del botón de reinicio es demasiado largo para el ancho del menú (280px). Reducir el texto o ampliar el botón. |
+| 1 | **Intro en inglés** | `index.html` | Líneas del lore siguen en inglés: `"You have no-clipped out of reality."`, `"Estimated square footage: 600,000,000+"`, `"Entities present: unknown"`. El juego debe estar completamente en español. |
+| 2 | **Barra de cordura invisible** | `style.css` + `main.js` | `#sanityBar` tiene solo 3px de alto, casi imperceptible durante el juego. Necesita más presencia visual. |
+| 3 | **"INTENTAR DE NUEVO" rompe en dos líneas** | `style.css` | Texto demasiado largo para el botón de 280px de ancho del menú final. |
+
+## Potential improvements (not yet done)
+
+- **Nginx gzip for GLBs** — `gzip_types` solo cubre text/JS/CSS. Añadir `application/octet-stream` ayudaría en KTH Cloud.
 
 ## Development workflow
 
@@ -107,19 +126,16 @@ Push to `main` → both deployments update automatically (~1–2 min).
 
 ```
 backrooms/          — Vite project (the actual game)
-  main.js           — entire game logic
+  main.js           — entire game logic (~1450 lines)
   index.html        — entry point
   style.css
   public/
-    models/         — GLB room files (tracked in git, large ~20MB each)
+    models/         — GLB files, Draco+WebP compressed (~700KB each)
     sounds/         — MP3 files
-    images/         — entity sprites, UI images
+    images/         — entity sprites (PNG), loading screen
+    draco/          — Draco WASM decoders (required for GLB loading)
   vite.config.js    — base: './' for relative paths
 assets/             — Blender source files (not served)
-  Blend/            — .blend files for each room + characters
-  Archimesh/        — Blender architecture addon outputs
-  Objects/          — OBJ/MTL exports
-  Images/           — source PNGs, XCF files
 Dockerfile
 nginx.conf.template
 .github/workflows/
