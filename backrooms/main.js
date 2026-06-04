@@ -180,6 +180,8 @@ const LEVEL_LORE = [
     '"escuché una voz que gritaba EJECUTADO.\nluego silencio."',
     '"encontré un teclado.\nescribí illaoi. las paredes temblaron."',
     '"warc no está perdido.\nwarc es el nivel."',
+    '"ejecutado?"',
+    '"pasen polno."',
   ],
   [ // Nivel 1 — Habitable Zone
     '"las tuberías no deberían\nhacer ese ruido."',
@@ -191,6 +193,8 @@ const LEVEL_LORE = [
     '"me dijo que jugaba illaoi.\nlos tentáculos no eran del juego."',
     '"warc.exe no camina.\nflotar no debería ser posible aquí."',
     '"dejó una nota: \'ejecutado\'.\nnada más. solo eso."',
+    '"polnito uwu."',
+    '"ban bobe.\nnunca volvió."',
   ],
   [ // Nivel 2 — Pipe Dreams
     '"la oscuridad aquí tiene peso."',
@@ -202,6 +206,8 @@ const LEVEL_LORE = [
     '"aquí warc es la R de illaoi.\ntú eres la copia."',
     '"el warcbubu me encontró.\ncorrí tres horas. sigo corriendo."',
     '"la copia tiene más vida que el campeón.\naquí eso no es un chiste."',
+    '"onichan...\nayúdame."',
+    '"fuera moros.\nfuera todos.\naquí no hay salida."',
   ],
   [ // Nivel 3 — Electrical Station
     '"alta tensión. no toques nada."',
@@ -214,6 +220,8 @@ const LEVEL_LORE = [
     '"ejecutado. siempre ejecutado.\nla copia tiene más vida que el campeón."',
     '"los cuatro están aquí: warc.exe, el warcbubu, warc enano, warc negro.\nno puedes esquivarlos a todos."',
     '"warc era un streamer de lol.\nahora es esto.\ntú serás lo siguiente."',
+    '"pasen polno.\npasen polno.\npasen polno.\npasen polno."',
+    '"ban bobe.\nejectuado.\nfuera moros.\ntodo a la vez.\nnunca paró el chat."',
   ],
 ];
 let usedLoreIndices = new Set();
