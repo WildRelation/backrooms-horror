@@ -47,6 +47,16 @@ body {
   margin: 0.15em 0;
 }
 /* ── Controls block ── */
+.ctrl-section-title {
+  font-size: 0.6rem;
+  letter-spacing: 0.25em;
+  color: #c8b87a;
+  text-align: center;
+  margin-top: 0.8em;
+  margin-bottom: 0.3em;
+  border-bottom: 1px solid #2a2210;
+  padding-bottom: 0.3em;
+}
 #controls {
   margin-top: 2em;
   border-top: 1px solid #3a3320;

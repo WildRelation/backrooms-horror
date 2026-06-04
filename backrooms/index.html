@@ -16,21 +16,31 @@
         <p class="lore small">Superficie estimada: 600,000,000+ m²</p>
         <p class="lore small">Entidades presentes: desconocido</p>
         <div id="controls">
+
+          <div class="ctrl-section-title">CONTROLES</div>
           <div class="ctrl-row"><span class="key">W A S D</span><span class="ctrl-desc">moverse</span></div>
           <div class="ctrl-row"><span class="key">MOUSE</span><span class="ctrl-desc">mirar alrededor</span></div>
-          <div class="ctrl-row"><span class="key">SHIFT</span><span class="ctrl-desc">correr (drena cordura)</span></div>
-          <div class="ctrl-row"><span class="key">ESC</span><span class="ctrl-desc">pausar / liberar cursor</span></div>
-          <div class="ctrl-objective" id="introObjective">Recoge las páginas esparcidas por el mapa. Luego aparecerá la salida.</div>
-          <div class="ctrl-objective" style="margin-top:0.3em; font-size:0.65rem;">Quedarte quieto te consume. Sigue moviéndote.</div>
-          <div class="volume-row">
+          <div class="ctrl-row"><span class="key">SHIFT</span><span class="ctrl-desc">correr</span></div>
+          <div class="ctrl-row"><span class="key">ESC</span><span class="ctrl-desc">pausar</span></div>
+
+          <div class="ctrl-section-title" style="margin-top:1em;">OBJETIVO</div>
+          <div class="ctrl-objective" id="introObjective">Recoge las páginas esparcidas por el mapa. Cuando las tengas todas, aparecerá la salida. Hay 4 niveles.</div>
+
+          <div class="ctrl-section-title" style="margin-top:1em;">CORDURA</div>
+          <div class="ctrl-objective">La barra dorada de abajo es tu cordura. <strong style="color:#c8b87a;">Caminar la recupera.</strong> Quedarte quieto, correr o tener entidades cerca la drena. Si llega a cero, habrá un apagón forzado. A más miedo, todo se vuelve más difícil.</div>
+
+          <div class="volume-row" style="margin-top:1em;">
             <span class="key" style="min-width:80px;">VOLUMEN</span>
             <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.7">
             <span id="volumeLabel" class="ctrl-desc" style="min-width:40px;text-align:left;">70%</span>
           </div>
+
+          <div class="ctrl-section-title" style="margin-top:1em;">ENTIDADES</div>
           <div class="ctrl-entities">
-            <div class="entity-hint"><span class="entity-name">El Vigilante</span> — se congela si lo miras. Si le das la espalda, se acerca.</div>
-            <div class="entity-hint"><span class="entity-name">El Devorador</span> — te persigue. Dobla una esquina para que te pierda. Cuanto más miedo tienes, más rápido corre.</div>
-            <div class="entity-hint"><span class="entity-name">El Perdido</span> — deambula sin rumbo. No te acerques demasiado.</div>
+            <div class="entity-hint"><span class="entity-name">El Vigilante</span> — se congela si lo miras directamente. Si le das la espalda, se teleporta más cerca.</div>
+            <div class="entity-hint"><span class="entity-name">El Devorador</span> — te persigue. Cuanto más miedo tienes, más rápido corre. Dobla una esquina para que te pierda.</div>
+            <div class="entity-hint"><span class="entity-name">El Perdido</span> — deambula sin rumbo. Si te acercas, te seguirá lentamente.</div>
+            <div class="entity-hint"><span class="entity-name">Warc Negro</span> — solo se mueve en la oscuridad. Con la luz encendida, se congela.</div>
           </div>
         </div>
         <div id="clickPrompt">haz clic para entrar</div>
