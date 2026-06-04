@@ -1220,13 +1220,17 @@ function updateDevorador(ent, delta) {
       const spawn = room.scene.getObjectByName('Spawn').localToWorld(new THREE.Vector3());
       ent.sprite.position.set(spawn.x, ent.def.centerY, spawn.z);
       ent._teleportedBehind = true;
+      ent._teleportedBehindTimer = 0;
       ent.lostSightTimer = 0;
-      ent.lastKnownPos = null;
+      ent.lastKnownPos = pp.clone(); // keep hunting toward player after teleport
     }
   }
 
-  // Reset teleport flag when it becomes active again
-  if (canSee) ent._teleportedBehind = false;
+  // Reset teleport flag when it gets LOS again, or after 10s timeout
+  if (ent._teleportedBehind) {
+    ent._teleportedBehindTimer = (ent._teleportedBehindTimer ?? 0) + delta;
+    if (canSee || ent._teleportedBehindTimer > 10) ent._teleportedBehind = false;
+  }
 
   // #6 — silence timer before glitch plays on first spot
   if (ent._silenceTimer !== undefined) {
