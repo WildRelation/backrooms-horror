@@ -591,6 +591,30 @@ canvas {
   text-align: center;
 }
 
+/* ── Debug HUD ── */
+#debugHUD {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 300px;
+  max-height: 100vh;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.75);
+  color: #00ff88;
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  padding: 8px 10px;
+  z-index: 200;
+  white-space: pre;
+  pointer-events: none;
+  line-height: 1.5;
+}
+#debugHUD.show { display: block; }
+#debugHUD .dbg-label  { color: #aaa; }
+#debugHUD .dbg-warn   { color: #ff6b35; }
+#debugHUD .dbg-ok     { color: #00ff88; }
+#debugHUD .dbg-dim    { color: #555; }
+
 /* ── Jumpscare overlay ── */
 #jumpscareOverlay {
   display: none;

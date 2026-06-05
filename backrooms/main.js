@@ -262,6 +262,11 @@ let startTime;
 let deathMessage   = '';
 let killerSrc      = '';
 
+// ─── Debug ────────────────────────────────────────────────────────────────────
+let debugMode = false;
+let godMode   = false;
+let noclip    = false;
+
 // DOM
 const introScreen     = document.getElementById('introScreen');
 const vignette        = document.getElementById('vignette');
@@ -1732,7 +1737,7 @@ function animate() {
   if (bvhQueue.length > 0) bvhQueue.shift().computeBoundsTree();
 
   if (!gameLost && !gameWon && !gamePaused) {
-    collisionDetection();
+    if (!noclip) collisionDetection();
     checkRoomChange(controls);
     playerMesh.position.copy(controls.object.position);
     updateRoomLights(delta, now / 1000);
@@ -1755,7 +1760,7 @@ function animate() {
       exitMesh.material.emissiveIntensity = 0.4 + Math.sin(now / 400) * 0.3;
     }
 
-    if (checkEntityKills()) {
+    if (!godMode && checkEntityKills()) {
       triggerDeath();
     } else if (exitMesh && controls.object.position.distanceTo(exitMesh.position) < 1.2) {
       triggerWin();
@@ -1845,6 +1850,180 @@ document.getElementById('volumeSliderMenu')?.addEventListener('input', e => {
   applyVolume(v);
   syncVolumeUI(v);
 });
+
+// ─── Debug HUD + window.debug ─────────────────────────────────────────────────
+
+const debugHUDEl = document.getElementById('debugHUD');
+
+function updateDebugHUD() {
+  if (!debugMode || !debugHUDEl) return;
+  const pp = controls?.object?.position;
+  const f  = n => n.toFixed(1);
+  const lines = [];
+
+  lines.push(`<span class="dbg-warn">[ F3 DEBUG ${godMode ? '· GOD ' : ''}${noclip ? '· NOCLIP ' : ''}]</span>`);
+  lines.push('');
+
+  // Player
+  if (pp) lines.push(`<span class="dbg-label">PLAYER</span>  x:${f(pp.x)} y:${f(pp.y)} z:${f(pp.z)}`);
+  lines.push(`<span class="dbg-label">LEVEL  </span>  ${LEVEL_CONFIGS[currentLevel].name}`);
+  lines.push(`<span class="dbg-label">SANITY </span>  ${Math.round(sanity)}%`);
+  lines.push('');
+
+  // Pages
+  lines.push(`<span class="dbg-label">PAGINAS (${pageMeshes.length} activas / ${pagesCollected} recogidas)</span>`);
+  if (pageMeshes.length === 0) {
+    lines.push(`  <span class="dbg-dim">ninguna en escena</span>`);
+  } else {
+    pageMeshes.forEach((p, i) => {
+      const dx = pp ? f(pp.distanceTo(p.position)) : '?';
+      lines.push(`  [${i}] x:${f(p.position.x)} z:${f(p.position.z)}  <span class="dbg-label">dist:${dx}u</span>`);
+    });
+  }
+  lines.push('');
+
+  // Exit
+  if (exitMesh) {
+    const dx = pp ? f(pp.distanceTo(exitMesh.position)) : '?';
+    lines.push(`<span class="dbg-ok">SALIDA</span>  x:${f(exitMesh.position.x)} z:${f(exitMesh.position.z)}  dist:${dx}u`);
+  } else {
+    lines.push(`<span class="dbg-dim">SALIDA  no spawneada aún</span>`);
+  }
+  lines.push('');
+
+  // Entities
+  lines.push(`<span class="dbg-label">ENTIDADES</span>`);
+  for (const ent of entities) {
+    const cd = spawnCooldowns[ent.def.id] ?? 0;
+    if (ent.active) {
+      const dx = pp ? f(pp.distanceTo(ent.sprite.position)) : '?';
+      lines.push(`  <span class="dbg-warn">[ACTIVA]</span> ${ent.def.id.padEnd(10)} x:${f(ent.sprite.position.x)} z:${f(ent.sprite.position.z)} dist:${dx}u`);
+    } else {
+      lines.push(`  <span class="dbg-dim">[inactiva]</span> ${ent.def.id.padEnd(10)} cd:${f(cd)}s`);
+    }
+  }
+  lines.push('');
+  lines.push(`<span class="dbg-dim">── consola: debug.help() ──</span>`);
+
+  debugHUDEl.innerHTML = lines.join('\n');
+}
+
+// Actualiza el HUD cada 10 frames
+const _origAnimate = animate;
+// Inject into animate loop by patching the FPS counter update
+const _debugInterval = setInterval(() => {
+  if (debugMode) updateDebugHUD();
+}, 150);
+
+// F3 toggle
+document.addEventListener('keydown', e => {
+  if (e.code === 'F3') {
+    e.preventDefault();
+    debugMode = !debugMode;
+    debugHUDEl.classList.toggle('show', debugMode);
+    if (!debugMode) debugHUDEl.innerHTML = '';
+  }
+});
+
+// window.debug API
+window.debug = {
+  help() {
+    console.log(`%c── Warcrooms Debug API ──
+debug.god()        — toggle god mode (no mueres)
+debug.noclip()     — toggle noclip (atraviesas paredes)
+debug.pages()      — lista posiciones de páginas
+debug.entities()   — lista estado de entidades
+debug.tp(x, z)     — teleport a coordenadas
+debug.tpPage(idx)  — teleport a página (índice 0, 1…)
+debug.tpExit()     — teleport a la salida
+debug.spawnExit()  — forzar spawn de salida
+debug.killAll()    — desactivar todas las entidades
+debug.setLevel(n)  — cambiar nivel (0-3, reinicia)
+debug.sanity(n)    — establecer cordura (0-100)
+debug.f3()         — toggle HUD de debug`, 'color:#00ff88;font-family:monospace');
+  },
+
+  god() {
+    godMode = !godMode;
+    console.log(`%cGod mode: ${godMode ? 'ON' : 'OFF'}`, 'color:#00ff88');
+  },
+
+  noclip() {
+    noclip = !noclip;
+    console.log(`%cNoclip: ${noclip ? 'ON' : 'OFF'}`, 'color:#00ff88');
+  },
+
+  pages() {
+    const pp = controls?.object?.position;
+    if (!pageMeshes.length) { console.log('No hay páginas activas'); return; }
+    pageMeshes.forEach((p, i) => {
+      const dist = pp ? pp.distanceTo(p.position).toFixed(1) + 'u' : 'n/a';
+      console.log(`%cPágina ${i}: x=${p.position.x.toFixed(1)} z=${p.position.z.toFixed(1)}  (dist: ${dist})`, 'color:#fff');
+    });
+  },
+
+  entities() {
+    entities.forEach(ent => {
+      const cd = spawnCooldowns[ent.def.id] ?? 0;
+      if (ent.active) {
+        const pp = controls?.object?.position;
+        const dist = pp ? pp.distanceTo(ent.sprite.position).toFixed(1) + 'u' : 'n/a';
+        console.log(`%c[ACTIVA]  ${ent.def.id}  x=${ent.sprite.position.x.toFixed(1)} z=${ent.sprite.position.z.toFixed(1)}  dist:${dist}`, 'color:#ff6b35');
+      } else {
+        console.log(`%c[inactiva] ${ent.def.id}  cooldown: ${cd.toFixed(1)}s`, 'color:#555');
+      }
+    });
+  },
+
+  tp(x, z) {
+    if (!controls?.object) { console.log('Juego no iniciado'); return; }
+    controls.object.position.set(x, 1.65, z);
+    console.log(`%cTeleport → x:${x} z:${z}`, 'color:#00ff88');
+  },
+
+  tpPage(idx = 0) {
+    const p = pageMeshes[idx];
+    if (!p) { console.log(`No existe página ${idx}`); return; }
+    controls.object.position.set(p.position.x, 1.65, p.position.z + 1.5);
+    console.log(`%cTeleport → página ${idx}`, 'color:#00ff88');
+  },
+
+  tpExit() {
+    if (!exitMesh) { console.log('La salida no ha spawneado aún'); return; }
+    controls.object.position.set(exitMesh.position.x, 1.65, exitMesh.position.z + 1.5);
+    console.log('%cTeleport → salida', 'color:#00ff88');
+  },
+
+  spawnExit() {
+    pagesCollected = LEVEL_CONFIGS[currentLevel].pagesNeeded;
+    spawnExit();
+    console.log('%cSalida spawneada', 'color:#00ff88');
+  },
+
+  killAll() {
+    entities.filter(e => e.active).forEach(e => deactivateEntity(e));
+    console.log('%cTodas las entidades desactivadas', 'color:#00ff88');
+  },
+
+  setLevel(n) {
+    if (n < 0 || n > MAX_LEVEL) { console.log(`Nivel inválido (0-${MAX_LEVEL})`); return; }
+    currentLevel = n;
+    init();
+    console.log(`%cNivel cambiado a ${n}`, 'color:#00ff88');
+  },
+
+  sanity(n) {
+    sanity = Math.max(0, Math.min(100, n));
+    console.log(`%cCordura → ${sanity}%`, 'color:#00ff88');
+  },
+
+  f3() {
+    debugMode = !debugMode;
+    debugHUDEl.classList.toggle('show', debugMode);
+  },
+};
+
+console.log('%c[Warcrooms] debug disponible — escribe debug.help()', 'color:#00ff88;font-family:monospace');
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
