@@ -604,9 +604,9 @@ canvas {
 }
 #jumpscareOverlay.active { display: flex; }
 #jumpscareImg {
-  max-height: 100vh;
-  max-width: 100vw;
-  object-fit: contain;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
   animation: jumpscareRush 0.25s ease-out forwards;
 }
 @keyframes jumpscareRush {
