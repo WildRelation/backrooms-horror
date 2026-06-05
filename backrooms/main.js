@@ -832,12 +832,41 @@ function setupScene() {
 
 // ─── Pages ────────────────────────────────────────────────────────────────────
 
+// Check whether a world position has enough open space for the player to reach it.
+// Casts 4 horizontal rays; needs at least 2 clear directions (wall >1.5u away).
+function isSpawnAccessible(worldPos) {
+  const meshes = [];
+  currentRooms.forEach(r => r.scene.traverse(o => { if (o.isMesh) meshes.push(o); }));
+  const testPos = new THREE.Vector3(worldPos.x, 1.2, worldPos.z);
+  let open = 0;
+  for (const dir of [
+    new THREE.Vector3(1,0,0), new THREE.Vector3(-1,0,0),
+    new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1),
+  ]) {
+    losRaycaster.set(testPos, dir);
+    losRaycaster.far = 1.5;
+    if (losRaycaster.intersectObjects(meshes, false).length === 0) open++;
+  }
+  return open >= 2;
+}
+
+// Return the best accessible spawn position for a room:
+// prefers the Spawn object, falls back to room grid center.
+function getRoomSpawnPos(roomIdx) {
+  const room = currentRooms[roomIdx];
+  const spawnObj = room.scene.getObjectByName('Spawn');
+  if (spawnObj) {
+    const pos = spawnObj.localToWorld(new THREE.Vector3());
+    if (isSpawnAccessible(pos)) return pos;
+  }
+  // Fallback: geometric center of the grid slot (scene.position)
+  return room.scene.position.clone();
+}
+
 function spawnPageAt(roomIdx) {
   if (pagesCollected + pageMeshes.length >= LEVEL_CONFIGS[currentLevel].pagesNeeded) return;
 
-  // Use the room's Spawn point — same anchor used by player and entities, guaranteed interior
-  const spawnObj = currentRooms[roomIdx].scene.getObjectByName('Spawn');
-  const rp = spawnObj ? spawnObj.localToWorld(new THREE.Vector3()) : currentRooms[roomIdx].scene.position.clone();
+  const rp = getRoomSpawnPos(roomIdx);
 
   // Large bright white page — visible from across the room
   const page = new THREE.Mesh(
@@ -850,9 +879,7 @@ function spawnPageAt(roomIdx) {
       depthWrite: false,
     })
   );
-  const offsetX = rand(-0.5, 0.5);
-  const offsetZ = rand(-0.5, 0.5);
-  page.position.set(rp.x + offsetX, 0.9, rp.z + offsetZ);
+  page.position.set(rp.x, 0.9, rp.z);
   page.rotation.y = Math.random() * Math.PI * 2;
 
   // Strong white light — visible from across the room without compass
@@ -1043,11 +1070,14 @@ function spawnExit() {
   exitLight.position.set(0, 0, 0.5);
   exitMesh.add(exitLight);
 
-  // Use the room's Spawn point — guaranteed interior position
-  let idx = Math.floor(Math.random() * 8);
-  if (idx >= 4) idx++;
-  const exitSpawnObj = currentRooms[idx].scene.getObjectByName('Spawn');
-  const rc = exitSpawnObj ? exitSpawnObj.localToWorld(new THREE.Vector3()) : currentRooms[idx].scene.position.clone();
+  // Use the best accessible spawn position for a non-center room
+  const candidates = [0,1,2,3,5,6,7,8].sort(() => Math.random() - 0.5);
+  let rc = null;
+  for (const idx of candidates) {
+    const pos = getRoomSpawnPos(idx);
+    if (isSpawnAccessible(pos)) { rc = pos; break; }
+  }
+  if (!rc) rc = currentRooms[candidates[0]].scene.position.clone();
   exitMesh.position.set(rc.x, 1.45, rc.z);
   scene.add(exitMesh);
 
