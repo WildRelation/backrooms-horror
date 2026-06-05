@@ -101,6 +101,12 @@ Volúmenes actuales:
 - `death.mp3`: 0.6
 - `win.mp3`: 0.6
 
+### Death flow
+1. `checkEntityKills()` detecta colisión → guarda `killerSrc = ent.def.src` y `deathMessage`
+2. `triggerDeath()` muestra `#jumpscareOverlay` con la imagen de la entidad killer (0.9s, `object-fit: cover` fullscreen, animación `jumpscareRush`: zoom desde 55% oscuro → impacto 108% → 100%)
+3. Overlay se oculta → pantalla roja de muerte + mensaje + sonido `death.mp3`
+4. 3.5s → menú de reintentar
+
 ### HUD elements
 - **Contador de páginas** — top-right, dots (○●)
 - **Page radar** — bottom-left, punto si hay página en el área
@@ -138,6 +144,8 @@ Cada nivel tiene un array de strings mostrados al recoger páginas. Incluyen:
 | Entidades no respawnean | Fixed | Cooldowns por nivel + check periódico cada 20s |
 | Entidades ignoraban cooldowns de nivel | Fixed | `deactivateEntity` usa `LEVEL_CONFIGS[currentLevel].cooldowns` |
 | Entidades raramente spawneaban | Fixed | Eliminado el roll de 35%; spawna siempre si condiciones se cumplen |
+| Páginas spawneaban juntas | Fixed | `trySpawnPage` verifica distancia ≥20u entre páginas existentes |
+| Sin feedback visual al morir | Fixed | Jumpscare fullscreen con cara de la entidad killer (0.9s) antes de death screen |
 
 ## Development workflow
 
